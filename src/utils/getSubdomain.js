@@ -29,6 +29,11 @@ export function getSubdomain() {
   console.log('getSubdomain: hostname parts:', parts);
   if (parts.length > 2) {
     const subdomain = parts[0];
+    // Treat 'www' as NOT a clinic subdomain
+    if (subdomain === 'www') {
+      console.log('getSubdomain: www detected, treating as no subdomain');
+      return null;
+    }
     // Store the subdomain in localStorage for later use
     localStorage.setItem('currentClinicSubdomain', subdomain);
     console.log('getSubdomain: extracted subdomain from hostname:', subdomain);
