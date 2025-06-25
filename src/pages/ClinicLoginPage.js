@@ -144,6 +144,15 @@ export default function ClinicLoginPage() {
         >
           {loading ? 'Logging in...' : 'Login'}
         </button>
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            className="text-blue-600 underline hover:text-blue-800 text-sm font-medium"
+            onClick={() => navigate('/forgot-password')}
+          >
+            Forgot Password?
+          </button>
+        </div>
         
         {clinicInfo && clinicInfo.credentials.length > 0 && (
           <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">

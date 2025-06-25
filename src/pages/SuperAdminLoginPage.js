@@ -42,6 +42,15 @@ export default function SuperAdminLoginPage() {
         <button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-blue-500 to-emerald-500 text-white py-2 px-8 rounded-full font-bold shadow-lg hover:from-blue-600 hover:to-emerald-600 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-60">
           {loading ? 'Logging in...' : 'Login'}
         </button>
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            className="text-blue-600 underline hover:text-blue-800 text-sm font-medium"
+            onClick={() => navigate('/forgot-password')}
+          >
+            Forgot Password?
+          </button>
+        </div>
         <div className="mt-4 text-sm text-center text-gray-600">
           <p>Super Admin Credentials:</p>
           <p className="font-mono">admin@pediatrician.com / admin123</p>

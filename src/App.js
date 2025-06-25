@@ -16,6 +16,9 @@ import PatientDetails from './components/PatientDetails';
 import SupabaseTest from './components/SupabaseTest';
 import { supabase } from './lib/supabase';
 import { getSubdomain } from './utils/getSubdomain';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import VerifyOtpPage from './pages/VerifyOtpPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 // Mock data for appointments
 const mockAppointments = [
@@ -296,17 +299,18 @@ function App() {
                   <SuperAdminApp />
                 </SuperAdminAuthWrapper>
               } />
-              
+              {/* Password Reset Routes */}
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/verify-otp" element={<VerifyOtpPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
               {/* Clinic Routes - Available on localhost with subdomain or production subdomains */}
               <Route path="/clinic-login" element={<ClinicLoginPage />} />
               <Route path="/clinic-dashboard" element={<ClinicAppContent />} />
               <Route path="/dashboard" element={<ClinicAppContent />} />
-              
               {/* Root route - Show superadmin on localhost, clinic on subdomains */}
               <Route path="/" element={
                 subdomain ? <ClinicLoginPage /> : <SuperAdminLoginPage />
               } />
-              
               {/* Catch all */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
