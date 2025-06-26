@@ -1,9 +1,8 @@
 // api/verify-otp.js
 const { createClient } = require('@supabase/supabase-js');
-const { Resend } = require('resend');
+const emailService = require('./email-service');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 module.exports = async function handler(req, res) {
   // Enable CORS for Vercel
@@ -87,35 +86,30 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: 'Failed to process verification' });
     }
 
-    // Send confirmation email
+    // Send confirmation email via emailService
     try {
-      await resend.emails.send({
-        from: 'no-reply@pediacircle.com', // Use your verified domain
-        to: email,
-        subject: 'OTP Verified - Pediatrician App',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #059669;">OTP Verification Successful</h2>
-            <p>Your OTP has been verified successfully. You can now proceed to reset your password.</p>
-            <div style="background-color: #f0fdf4; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
-              <h3 style="color: #166534; margin: 0;">✅ Verification Complete</h3>
-              <p style="color: #166534; margin: 10px 0;">Your account has been verified and you can now reset your password.</p>
-            </div>
-            <p style="color: #6b7280; font-size: 14px;">
-              If you didn't request this verification, please contact support immediately.
-            </p>
-            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-            <p style="color: #9ca3af; font-size: 12px;">
-              This is an automated message from the Pediatrician App. Please do not reply to this email.
-            </p>
+      await emailService.sendEmail(
+        email,
+        'OTP Verified - Pediatrician App',
+        `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #059669;">OTP Verification Successful</h2>
+          <p>Your OTP has been verified successfully. You can now proceed to reset your password.</p>
+          <div style="background-color: #f0fdf4; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
+            <h3 style="color: #166534; margin: 0;">✅ Verification Complete</h3>
+            <p style="color: #166534; margin: 10px 0;">Your account has been verified and you can now reset your password.</p>
           </div>
-        `,
-        text: `Your OTP has been verified successfully. You can now proceed to reset your password.`
-      });
+          <p style="color: #6b7280; font-size: 14px;">
+            If you didn't request this verification, please contact support immediately.
+          </p>
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+          <p style="color: #9ca3af; font-size: 12px;">
+            This is an automated message from the Pediatrician App. Please do not reply to this email.
+          </p>
+        </div>`
+      );
       console.log('Confirmation email sent successfully to:', email);
     } catch (emailError) {
       console.error('Error sending confirmation email:', emailError);
-      console.error('Email error details:', emailError.message);
       // Don't fail the request if confirmation email fails
     }
 

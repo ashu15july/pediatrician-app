@@ -1,31 +1,22 @@
 // api/request-password-reset.js
 const { createClient } = require('@supabase/supabase-js');
-const { Resend } = require('resend');
+const emailService = require('./email-service');
 
 // Debug environment variables
 console.log('Environment variables check:');
 console.log('SUPABASE_URL:', process.env.SUPABASE_URL ? 'SET' : 'NOT SET');
 console.log('SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
-console.log('RESEND_API_KEY:', process.env.RESEND_API_KEY ? 'SET' : 'NOT SET');
+console.log('EMAIL_PROVIDER:', process.env.EMAIL_PROVIDER || 'resend');
 
 // Check if environment variables are available
-if (!process.env.RESEND_API_KEY) {
-  console.error('RESEND_API_KEY is not set');
-}
-
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
   console.error('Supabase environment variables are not set');
   console.error('SUPABASE_URL:', process.env.SUPABASE_URL);
   console.error('SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
 }
 
-// Only create clients if environment variables are available
-let resend = null;
+// Only create client if environment variables are available
 let supabase = null;
-
-if (process.env.RESEND_API_KEY) {
-  resend = new Resend(process.env.RESEND_API_KEY);
-}
 
 if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
   supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
@@ -120,49 +111,40 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: 'Failed to process request' });
     }
 
-    // Check if Resend is configured
-    if (!resend) {
-      console.error('Resend API key not configured');
-      return res.status(500).json({ 
-        error: 'Email service not configured',
-        details: 'RESEND_API_KEY is missing'
-      });
-    }
-
-    // Send email via Resend
-    try {
-      await resend.emails.send({
-        from: 'onboarding@resend.dev', // Use Resend's default domain
-        to: email,
-        subject: 'Password Reset OTP - Pediatrician App',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #2563eb;">Password Reset Request</h2>
-            <p>You have requested to reset your password for the Pediatrician App.</p>
-            <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
-              <h3 style="color: #1f2937; margin: 0;">Your OTP Code</h3>
-              <div style="font-size: 32px; font-weight: bold; color: #2563eb; letter-spacing: 4px; margin: 10px 0;">
-                ${otp}
-              </div>
-              <p style="color: #6b7280; margin: 0;">This code will expire in 10 minutes</p>
-            </div>
-            <p style="color: #6b7280; font-size: 14px;">
-              If you didn't request this password reset, please ignore this email.
-            </p>
-            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-            <p style="color: #9ca3af; font-size: 12px;">
-              This is an automated message from the Pediatrician App. Please do not reply to this email.
-            </p>
+    // Send email via email service
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2563eb;">Password Reset Request</h2>
+        <p>You have requested to reset your password for the Pediatrician App.</p>
+        <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
+          <h3 style="color: #1f2937; margin: 0;">Your OTP Code</h3>
+          <div style="font-size: 32px; font-weight: bold; color: #2563eb; letter-spacing: 4px; margin: 10px 0;">
+            ${otp}
           </div>
-        `,
-        text: `Your password reset OTP is: ${otp}. This code will expire in 10 minutes. If you didn't request this, please ignore this email.`
-      });
-      console.log('Email sent successfully to:', email);
-    } catch (emailError) {
-      console.error('Error sending email:', emailError);
-      console.error('Email error details:', emailError.message);
+          <p style="color: #6b7280; margin: 0;">This code will expire in 10 minutes</p>
+        </div>
+        <p style="color: #6b7280; font-size: 14px;">
+          If you didn't request this password reset, please ignore this email.
+        </p>
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+        <p style="color: #9ca3af; font-size: 12px;">
+          This is an automated message from the Pediatrician App. Please do not reply to this email.
+        </p>
+      </div>
+    `;
+
+    const emailResult = await emailService.sendEmail(
+      email,
+      'Password Reset OTP - Pediatrician App',
+      emailHtml
+    );
+
+    if (!emailResult.success) {
+      console.error('Error sending email:', emailResult.error);
       return res.status(500).json({ error: 'Failed to send email' });
     }
+
+    console.log('Email sent successfully to:', email);
 
     // Always respond with success for security
     return res.status(200).json({ 
