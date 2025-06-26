@@ -34,9 +34,12 @@ export default function ClinicLoginPage() {
           } else if (clinicData && clinicData.length > 0) {
             const clinic = clinicData[0];
             
-            // Fetch users for this clinic using RPC function
+            // Fetch users for this clinic using direct query instead of RPC
             const { data: users, error: usersError } = await supabase
-              .rpc('get_clinic_users', { clinic_subdomain: subdomain });
+              .from('users')
+              .select('id, email, role, full_name, phone, clinic_id, created_at')
+              .eq('clinic_id', clinic.id)
+              .order('created_at', { ascending: false });
 
             const credentials = users && !usersError ? users.map(user => ({
               role: user.role.charAt(0).toUpperCase() + user.role.slice(1),

@@ -40,10 +40,15 @@ export default function ForgotPasswordPage() {
       setLoading(false);
       
       if (res.ok) {
-        setSuccess(responseData.message || 'If your email is registered, you will receive an OTP.');
-        setTimeout(() => {
-          navigate('/verify-otp', { state: { email } });
-        }, 1000);
+        if (responseData.success) {
+          setSuccess(responseData.message || 'If your email is registered, you will receive an OTP.');
+          setTimeout(() => {
+            navigate('/verify-otp', { state: { email } });
+          }, 1000);
+        } else {
+          // Email not found in system
+          setError(responseData.message || 'Email not found in our system.');
+        }
       } else {
         const errorMessage = responseData.error?.message || responseData.error || 'Failed to send OTP. Please try again.';
         setError(errorMessage);

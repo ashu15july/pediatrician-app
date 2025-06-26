@@ -64,23 +64,44 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Find user
+    // Find user with more detailed logging
+    console.log('Attempting to find user with email:', email);
+    
     const { data: user, error: userError } = await supabase
       .from('users')
-      .select('id')
+      .select('id, email, role, clinic_id')
       .eq('email', email)
       .single();
 
+    console.log('Query result:', { user, userError });
+
     if (userError) {
       console.error('Error finding user:', userError);
-      // Don't reveal if user exists or not for security
+      console.error('Error code:', userError.code);
+      console.error('Error message:', userError.message);
+      
+      // Check if it's a "not found" error vs other error
+      if (userError.code === 'PGRST116') {
+        console.log('User not found in database:', email);
+        return res.status(200).json({ 
+          success: false, 
+          message: 'Email not found in our system. Please check your email address or contact your administrator.' 
+        });
+      }
+      // For other errors, don't reveal if user exists or not for security
+      return res.status(200).json({ success: true, message: 'If your email is registered, you will receive an OTP.' });
     }
 
     if (!user) {
       // Always respond with success for security reasons
       console.log('User not found, but responding with success for security');
-      return res.status(200).json({ success: true, message: 'If your email is registered, you will receive an OTP.' });
+      return res.status(200).json({ 
+        success: false, 
+        message: 'Email not found in our system. Please check your email address or contact your administrator.' 
+      });
     }
+
+    console.log('Found user:', { id: user.id, email: user.email, role: user.role, clinic_id: user.clinic_id });
 
     // Generate OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
