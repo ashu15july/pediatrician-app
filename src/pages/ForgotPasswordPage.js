@@ -13,24 +13,39 @@ export default function ForgotPasswordPage() {
     setError('');
     setSuccess('');
     setLoading(true);
+    
     try {
+      console.log('Sending password reset request for email:', email);
+      
       const res = await fetch('/api/request-password-reset', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify({ email })
       });
+      
+      console.log('Response status:', res.status);
+      console.log('Response headers:', res.headers);
+      
+      const responseData = await res.json();
+      console.log('Response data:', responseData);
+      
       setLoading(false);
+      
       if (res.ok) {
-        setSuccess('If your email is registered, you will receive an OTP.');
+        setSuccess(responseData.message || 'If your email is registered, you will receive an OTP.');
         setTimeout(() => {
           navigate('/verify-otp', { state: { email } });
         }, 1000);
       } else {
-        setError('Failed to send OTP. Please try again.');
+        setError(responseData.error || 'Failed to send OTP. Please try again.');
       }
     } catch (err) {
+      console.error('Error in password reset request:', err);
       setLoading(false);
-      setError('Failed to send OTP. Please try again.');
+      setError('Network error. Please check your connection and try again.');
     }
   };
 
@@ -40,11 +55,21 @@ export default function ForgotPasswordPage() {
         <h2 className="text-2xl font-bold text-blue-700 dark:text-blue-200 mb-6 text-center">Forgot Password</h2>
         <div className="mb-4">
           <label className="block text-sm font-medium mb-1 text-blue-800 dark:text-blue-200">Email</label>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200" />
+          <input 
+            type="email" 
+            value={email} 
+            onChange={e => setEmail(e.target.value)} 
+            required 
+            className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200" 
+          />
         </div>
         {error && <div className="text-red-500 text-sm mb-4">{error}</div>}
         {success && <div className="text-green-600 text-sm mb-4">{success}</div>}
-        <button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-blue-500 to-emerald-500 text-white py-2 px-8 rounded-full font-bold shadow-lg hover:from-blue-600 hover:to-emerald-600 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-60">
+        <button 
+          type="submit" 
+          disabled={loading} 
+          className="w-full bg-gradient-to-r from-blue-500 to-emerald-500 text-white py-2 px-8 rounded-full font-bold shadow-lg hover:from-blue-600 hover:to-emerald-600 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-60"
+        >
           {loading ? 'Sending OTP...' : 'Send OTP'}
         </button>
       </form>
