@@ -13,7 +13,6 @@ import MainLayout from './layouts/MainLayout';
 import Calendar from './components/Calendar';
 import Patients from './components/Patients';
 import PatientDetails from './components/PatientDetails';
-import SupabaseTest from './components/SupabaseTest';
 import { supabase } from './lib/supabase';
 import { getSubdomain } from './utils/getSubdomain';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';

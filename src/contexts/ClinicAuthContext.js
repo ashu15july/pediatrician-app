@@ -83,81 +83,22 @@ export function ClinicAuthProvider({ children }) {
 
   const login = async (username, password) => {
     try {
-      // Get the current clinic domain
-      const subdomain = getSubdomain();
-      console.log('ClinicAuthContext: Subdomain:', subdomain);
-      
-      if (!subdomain) {
-        throw new Error('No clinic subdomain found');
+      // Call the new login API
+      const apiBase = window.location.port === '3001' ? 'http://localhost:3001/api' : '/api';
+      const res = await fetch(`${apiBase}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: username, password })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Invalid credentials');
       }
-
-      // First, get the clinic ID based on the subdomain using RPC function
-      const { data: clinicData, error: clinicError } = await supabase
-        .rpc('get_clinic_by_subdomain', { clinic_subdomain: subdomain });
-
-      console.log('ClinicAuthContext: Clinic lookup result:', { clinicData, clinicError });
-
-      if (clinicError || !clinicData || clinicData.length === 0) {
-        throw new Error('Clinic not found');
-      }
-
-      const clinic = clinicData[0];
-
-      // Query the custom users table for clinic user with matching clinic_id
-      const { data: users, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', username)
-        .eq('clinic_id', clinic.id)
-        .neq('role', 'super_admin');
-
-      console.log('ClinicAuthContext: User lookup result:', { users, error });
-
-      if (error || !users || users.length === 0) {
-        throw new Error('Invalid credentials or user not found in this clinic');
-      }
-
-      // Get the first user (should be only one since email + clinic_id should be unique)
-      const data = users[0];
-
-      // Verify password using PostgreSQL crypt function
-      const { data: passwordCheck, error: passwordError } = await supabase
-        .rpc('verify_password', {
-          input_password: password,
-          stored_hash: data.password_hash
-        });
-
-      console.log('ClinicAuthContext: Password check result:', { passwordCheck, passwordError });
-
-      if (passwordError || !passwordCheck) {
-        throw new Error('Invalid password');
-      }
-
-      // Update last_login timestamp
-      await supabase
-        .from('users')
-        .update({ last_login: new Date().toISOString() })
-        .eq('id', data.id);
-
-      // Set user email in session for RLS policies
-      await setUserEmailInSession(data.email);
-
-      const userData = {
-        id: data.id,
-        email: data.email,
-        full_name: data.full_name,
-        role: data.role,
-        username: data.username,
-        clinic_id: data.clinic_id,
-        clinic_name: clinic.name,
-        clinic_domain: clinic.domain_url,
-        is_clinic_user: true
-      };
-
-      // Store the user in localStorage
-      localStorage.setItem('clinicUser', JSON.stringify(userData));
-      setCurrentUser(userData);
-      return userData;
+      // Optionally, check clinic_id matches current subdomain's clinic
+      // (You can add extra checks here if needed)
+      localStorage.setItem('clinicUser', JSON.stringify(data.user));
+      setCurrentUser(data.user);
+      return data.user;
     } catch (error) {
       console.error('Clinic user login error:', error);
       throw error;

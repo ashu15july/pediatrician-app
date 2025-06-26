@@ -23,48 +23,23 @@ export function SuperAdminAuthProvider({ children }) {
 
   const login = async (username, password) => {
     try {
-      // Query the custom users table for super admin
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', username)
-        .eq('role', 'super_admin')
-        .single();
-
-      if (error || !data) {
-        throw new Error('Invalid credentials or not a super admin');
+      // Call the new login API
+      const apiBase = window.location.port === '3001' ? 'http://localhost:3001/api' : '/api';
+      const res = await fetch(`${apiBase}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: username, password })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Invalid credentials');
       }
-
-      // Verify password using PostgreSQL crypt function
-      const { data: passwordCheck, error: passwordError } = await supabase
-        .rpc('verify_password', {
-          input_password: password,
-          stored_hash: data.password_hash
-        });
-
-      if (passwordError || !passwordCheck) {
-        throw new Error('Invalid password');
+      if (data.user.role !== 'super_admin') {
+        throw new Error('Not a super admin');
       }
-
-      // Update last_login timestamp
-      await supabase
-        .from('users')
-        .update({ last_login: new Date().toISOString() })
-        .eq('id', data.id);
-
-      const userData = {
-        id: data.id,
-        email: data.email,
-        full_name: data.full_name,
-        role: data.role,
-        username: data.username,
-        is_super_admin: true
-      };
-
-      // Store the user in localStorage
-      localStorage.setItem('superAdminUser', JSON.stringify(userData));
-      setCurrentUser(userData);
-      return userData;
+      localStorage.setItem('superAdminUser', JSON.stringify(data.user));
+      setCurrentUser(data.user);
+      return data.user;
     } catch (error) {
       console.error('Super admin login error:', error);
       throw error;

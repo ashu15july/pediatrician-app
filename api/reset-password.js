@@ -20,15 +20,15 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const { email, otp, newPassword } = req.body;
-    if (!email || !otp || !newPassword) {
-      return res.status(400).json({ error: 'Email, OTP, and new password are required' });
+    const { email, token, newPassword } = req.body;
+    if (!email || !token || !newPassword) {
+      return res.status(400).json({ error: 'Email, token, and new password are required' });
     }
 
-    // Find user and check OTP
+    // Find user and check token
     const { data: user, error: userError } = await supabase
       .from('users')
-      .select('id, reset_otp, reset_otp_expires_at')
+      .select('id, reset_token, reset_token_expires_at')
       .eq('email', email)
       .single();
 
@@ -37,26 +37,39 @@ module.exports = async function handler(req, res) {
       return res.status(500).json({ error: 'Server error' });
     }
 
+    // Parse expiry as UTC (add 'Z' if missing)
+    const expiry = user && user.reset_token_expires_at && user.reset_token_expires_at.endsWith('Z')
+      ? new Date(user.reset_token_expires_at)
+      : new Date((user && user.reset_token_expires_at ? user.reset_token_expires_at : '') + 'Z');
+
     if (
       !user ||
-      !user.reset_otp ||
-      !user.reset_otp_expires_at ||
-      user.reset_otp !== otp ||
-      new Date(user.reset_otp_expires_at) < new Date()
+      !user.reset_token ||
+      !user.reset_token_expires_at ||
+      String(user.reset_token).trim() !== String(token).trim() ||
+      expiry < new Date()
     ) {
-      return res.status(400).json({ error: 'Invalid or expired OTP' });
+      console.log('Token check failed:', {
+        user: user,
+        submittedToken: token,
+        dbToken: user ? user.reset_token : undefined,
+        dbExpiry: user ? user.reset_token_expires_at : undefined,
+        now: new Date().toISOString(),
+        expiry: expiry.toISOString()
+      });
+      return res.status(400).json({ error: 'Invalid or expired token' });
     }
 
     // Hash the new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Update password and clear OTP fields
+    // Update password and clear token fields
     const { error: updateError } = await supabase
       .from('users')
       .update({
-        password: hashedPassword,
-        reset_otp: null,
-        reset_otp_expires_at: null
+        password_hash: hashedPassword,
+        reset_token: null,
+        reset_token_expires_at: null
       })
       .eq('id', user.id);
 

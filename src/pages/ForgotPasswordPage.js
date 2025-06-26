@@ -17,7 +17,12 @@ export default function ForgotPasswordPage() {
     try {
       console.log('Sending password reset request for email:', email);
       
-      const res = await fetch('/api/request-password-reset', {
+      // Use the correct API base URL based on current port
+      const apiBase = window.location.port === '3001' 
+        ? 'http://localhost:3001/api'
+        : '/api';
+      
+      const res = await fetch(`${apiBase}/request-password-reset`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -40,7 +45,8 @@ export default function ForgotPasswordPage() {
           navigate('/verify-otp', { state: { email } });
         }, 1000);
       } else {
-        setError(responseData.error || 'Failed to send OTP. Please try again.');
+        const errorMessage = responseData.error?.message || responseData.error || 'Failed to send OTP. Please try again.';
+        setError(errorMessage);
       }
     } catch (err) {
       console.error('Error in password reset request:', err);
