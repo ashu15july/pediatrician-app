@@ -1,6 +1,6 @@
 // api/request-password-reset.js
-import { createClient } from '@supabase/supabase-js';
-import { Resend } from 'resend';
+const { createClient } = require('@supabase/supabase-js');
+const { Resend } = require('resend');
 
 // Check if environment variables are available
 if (!process.env.RESEND_API_KEY) {
@@ -14,7 +14,7 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
 const resend = new Resend(process.env.RESEND_API_KEY);
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // Enable CORS for Vercel
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -109,4 +109,4 @@ export default async function handler(req, res) {
     console.error('Unexpected error in password reset handler:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
-}
+};
