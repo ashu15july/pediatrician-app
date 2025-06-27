@@ -3,13 +3,11 @@ import { User, Phone, Mail, MapPin, AlertCircle, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useClinicAuth } from '../contexts/ClinicAuthContext';
-import { useClinic } from '../contexts/ClinicContext';
 import { getSubdomain } from '../utils/getSubdomain';
 
 const NewPatientForm = ({ onClose, onPatientAdded, editingPatient }) => {
   const { currentUser } = useAuth();
   const { currentUser: clinicUser } = useClinicAuth();
-  const { clinic } = useClinic();
   
   // Use clinic user if available, otherwise use regular user
   const activeUser = clinicUser || currentUser;

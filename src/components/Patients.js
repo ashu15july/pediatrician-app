@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { User, Plus, Search, Phone, Mail, MapPin, Calendar, Eye, Edit, Trash2 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import NewPatientForm from './NewPatientForm';
-import PatientDetails from './PatientDetails';
+import { Plus, Search, Eye, Edit, Trash2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useClinicAuth } from '../contexts/ClinicAuthContext';
 import { useClinic } from '../contexts/ClinicContext';
-import { getPatients, addPatient, updatePatient, deletePatient } from '../services/patientService';
+import { getPatients, deletePatient } from '../services/patientService';
+import NewPatientForm from './NewPatientForm';
+import PatientDetails from './PatientDetails';
 import AppointmentScheduler from './AppointmentScheduler';
 
 const Patients = () => {

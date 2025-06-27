@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, Plus, User, Calendar, Clock, Phone, Mail, MapPin } from 'lucide-react';
+import { Plus, User } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useClinicAuth } from '../contexts/ClinicAuthContext';
@@ -35,7 +35,6 @@ const DateAppointmentScheduler = ({
   const [appointmentType, setAppointmentType] = useState('checkup');
   const [timeSlot, setTimeSlot] = useState('');
   const [notes, setNotes] = useState('');
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isPatientDropdownOpen, setIsPatientDropdownOpen] = useState(false);
   const [isDoctorDropdownOpen, setIsDoctorDropdownOpen] = useState(false);
   const [highlightedPatientIndex, setHighlightedPatientIndex] = useState(-1);

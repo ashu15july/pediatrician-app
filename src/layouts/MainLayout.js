@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Calendar, User, LogOut, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useClinicAuth } from '../contexts/ClinicAuthContext';
-import { userRoles } from '../contexts/AuthContext';
 import { ClinicProvider, useClinic } from '../contexts/ClinicContext';
 
 const MainLayout = ({ children, currentView, setCurrentView, currentUser }) => {

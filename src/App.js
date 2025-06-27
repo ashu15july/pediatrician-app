@@ -1,67 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AuthProvider } from './contexts/AuthContext';
 import { ClinicAuthProvider, useClinicAuth } from './contexts/ClinicAuthContext';
 import { SuperAdminAuthProvider } from './contexts/SuperAdminAuthContext';
-import LoginPage from './pages/LoginPage';
 import ClinicLoginPage from './pages/ClinicLoginPage';
 import SuperAdminLoginPage from './pages/SuperAdminLoginPage';
 import SuperAdminAuthWrapper from './components/SuperAdminAuthWrapper';
 import SuperAdminApp from './SuperAdminApp';
-import UserTypeSelector from './components/UserTypeSelector';
 import MainLayout from './layouts/MainLayout';
 import Calendar from './components/Calendar';
 import Patients from './components/Patients';
-import PatientDetails from './components/PatientDetails';
 import { supabase } from './lib/supabase';
 import { getSubdomain } from './utils/getSubdomain';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import VerifyOtpPage from './pages/VerifyOtpPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
-
-// Mock data for appointments
-const mockAppointments = [
-  {
-    id: 1,
-    patientName: 'John Doe',
-    date: '2024-03-20',
-    time: '09:00',
-    type: 'Check-up',
-    status: 'scheduled'
-  },
-  {
-    id: 2,
-    patientName: 'Jane Smith',
-    date: '2024-03-20',
-    time: '10:30',
-    type: 'Follow-up',
-    status: 'scheduled'
-  }
-];
-
-// Mock data for patients
-const mockPatients = [
-  {
-    id: 1,
-    name: 'John Doe',
-    age: 5,
-    guardian: 'Mary Doe',
-    phone: '123-456-7890',
-    email: 'mary@example.com',
-    address: '123 Main St',
-    medicalHistory: 'No significant history'
-  },
-  {
-    id: 2,
-    name: 'Jane Smith',
-    age: 7,
-    guardian: 'John Smith',
-    phone: '098-765-4321',
-    email: 'john@example.com',
-    address: '456 Oak St',
-    medicalHistory: 'Allergic to penicillin'
-  }
-];
 
 function ClinicAppContent() {
   console.log('ClinicAppContent: Component rendering');

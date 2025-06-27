@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, FileText, Calendar, User, Phone, Mail, MapPin, Heart, AlertTriangle, Check, Clock, Edit, Trash2, Activity, Syringe } from 'lucide-react';
+import { X, Plus, FileText, Calendar, User, Phone, MapPin, Heart, AlertTriangle, Check, Clock, Edit, Trash2, Activity, Syringe } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useClinicAuth } from '../contexts/ClinicAuthContext';
 import { addVisitNote, getVisitNotes } from '../services/patientService';
