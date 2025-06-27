@@ -114,15 +114,15 @@ const Patients = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-100 via-blue-50 to-green-100 rounded-2xl shadow-lg p-6 flex flex-col md:flex-row items-center justify-between gap-4 border border-blue-200 mb-4">
+      <div className="bg-white rounded-lg shadow-sm p-6 flex flex-col md:flex-row items-center justify-between gap-4 border border-gray-200">
         <div className="flex items-center gap-3">
-          <svg className="w-7 h-7 text-blue-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="4" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
-          <h2 className="text-2xl font-bold text-blue-800 tracking-tight">Patients</h2>
+          <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="4" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
+          <h2 className="text-xl font-semibold text-gray-900">Patients</h2>
         </div>
         {hasPermission('manage_patients') && (
           <button
             onClick={() => setShowNewPatientForm(true)}
-            className="flex items-center gap-2 px-6 py-2 rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 text-white font-bold shadow-lg hover:from-blue-600 hover:to-emerald-600 focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all duration-150"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all duration-150"
           >
             <Plus className="w-5 h-5" />
             <span>Add New Patient</span>
@@ -131,54 +131,54 @@ const Patients = () => {
       </div>
 
       {/* Search Bar */}
-      <div className="relative mb-2">
+      <div className="relative">
         <input
           type="text"
           placeholder="Search patients..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-12 pr-4 py-3 rounded-full border border-blue-200 shadow focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-800 text-base"
+          className="w-full pl-12 pr-4 py-3 rounded-lg border border-gray-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white text-gray-800 text-base"
         />
-        <Search className="w-5 h-5 text-blue-400 absolute left-4 top-3.5" />
+        <Search className="w-5 h-5 text-gray-400 absolute left-4 top-3.5" />
       </div>
 
       {/* Patients Table */}
-      <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-blue-100">
+      <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-gray-200">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-blue-100">
-            <thead className="bg-blue-50">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Age</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Guardian</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Contact</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Actions</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Name</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Age</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Guardian</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Contact</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-blue-50">
+            <tbody className="bg-white divide-y divide-gray-200">
               {filteredPatients.map((patient) => (
-                <tr key={patient.id} className="hover:bg-blue-50 transition-all duration-150">
+                <tr key={patient.id} className="hover:bg-gray-50 transition-all duration-150">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-bold text-blue-900">{patient.name}</div>
-                    <div className="text-xs text-blue-500">{patient.gender}</div>
+                    <div className="text-sm font-semibold text-gray-900">{patient.name}</div>
+                    <div className="text-xs text-gray-500">{patient.gender}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-blue-900 font-semibold">{patient.age} years</div>
-                    <div className="text-xs text-blue-500">DOB: {new Date(patient.dob).toLocaleDateString()}</div>
+                    <div className="text-sm text-gray-900 font-semibold">{patient.age} years</div>
+                    <div className="text-xs text-gray-500">DOB: {new Date(patient.dob).toLocaleDateString()}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-blue-900 font-semibold">{patient.guardian_name}</div>
-                    <div className="text-xs text-blue-500">{patient.guardian_relationship}</div>
+                    <div className="text-sm text-gray-900 font-semibold">{patient.guardian_name}</div>
+                    <div className="text-xs text-gray-500">{patient.guardian_relationship}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-blue-900 font-semibold">{patient.guardian_phone}</div>
-                    <div className="text-xs text-blue-500">{patient.guardian_email}</div>
+                    <div className="text-sm text-gray-900 font-semibold">{patient.guardian_phone}</div>
+                    <div className="text-xs text-gray-500">{patient.guardian_email}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex items-center justify-end gap-2">
                       <button
                         onClick={() => handleViewDetails(patient)}
-                        className="inline-flex items-center gap-1 px-4 py-1 rounded-full font-semibold bg-blue-100 text-blue-700 shadow hover:bg-blue-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                        className="inline-flex items-center gap-1 px-4 py-1 rounded-lg font-semibold bg-blue-100 text-blue-700 hover:bg-blue-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300"
                       >
                         <Eye className="h-4 w-4" />
                         <span>View</span>
@@ -187,7 +187,7 @@ const Patients = () => {
                         <>
                           <button
                             onClick={() => handleEditPatient(patient)}
-                            className="inline-flex items-center gap-1 px-4 py-1 rounded-full font-semibold bg-yellow-100 text-yellow-700 shadow hover:bg-yellow-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                            className="inline-flex items-center gap-1 px-4 py-1 rounded-lg font-semibold bg-yellow-100 text-yellow-700 hover:bg-yellow-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-yellow-300"
                           >
                             <Edit className="h-4 w-4" />
                             <span>Edit</span>
@@ -195,7 +195,7 @@ const Patients = () => {
                           {(clinicUser.role === 'doctor' || clinicUser.role === 'admin') && (
                             <button
                               onClick={() => handleDeletePatient(patient)}
-                              className="inline-flex items-center gap-1 px-4 py-1 rounded-full font-semibold bg-red-100 text-red-700 shadow hover:bg-red-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-red-300"
+                              className="inline-flex items-center gap-1 px-4 py-1 rounded-lg font-semibold bg-red-100 text-red-700 hover:bg-red-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-red-300"
                             >
                               <Trash2 className="h-4 w-4" />
                               <span>Delete</span>

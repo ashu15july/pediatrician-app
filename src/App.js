@@ -42,12 +42,10 @@ function ClinicAppContent() {
     console.log('ClinicAppContent useEffect: clinicSubdomain set to:', subdomain);
   }, []);
 
+  // Load data when user is logged in and clinic subdomain is available
   useEffect(() => {
-    console.log('ClinicAppContent useEffect: isActiveLoggedIn =', isActiveLoggedIn);
-    console.log('ClinicAppContent useEffect: clinicSubdomain =', clinicSubdomain);
     if (isActiveLoggedIn && clinicSubdomain) {
-      console.log('ClinicAppContent useEffect: User is logged in, loading clinic data for:', clinicSubdomain);
-      loadAppointments();
+      console.log('ClinicAppContent useEffect: Loading data for clinic:', clinicSubdomain);
       loadPatients();
       loadDoctors();
     } else {
@@ -56,6 +54,14 @@ function ClinicAppContent() {
       console.log('ClinicAppContent useEffect: clinicSubdomain =', clinicSubdomain);
     }
   }, [isActiveLoggedIn, clinicSubdomain]);
+
+  // Load appointments after patients and doctors are loaded
+  useEffect(() => {
+    if (isActiveLoggedIn && clinicSubdomain && patients.length > 0 && doctors.length > 0) {
+      console.log('ClinicAppContent useEffect: Loading appointments after data is ready');
+      loadAppointments();
+    }
+  }, [isActiveLoggedIn, clinicSubdomain, patients.length, doctors.length]);
 
   // Debug logs
   useEffect(() => {
@@ -172,10 +178,10 @@ function ClinicAppContent() {
 
   // Add a separate effect for date changes
   useEffect(() => {
-    if (isActiveLoggedIn) {
+    if (isActiveLoggedIn && clinicSubdomain && patients.length > 0 && doctors.length > 0) {
       loadAppointments();
     }
-  }, [selectedDate]);
+  }, [selectedDate, isActiveLoggedIn, clinicSubdomain, patients.length, doctors.length]);
 
   if (isLoading) {
     return (

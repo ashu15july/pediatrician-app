@@ -270,9 +270,9 @@ const Calendar = ({
           {hasPermission('manage_appointments') && (
             <button
               onClick={() => setShowAppointmentScheduler(true)}
-              className="mt-4 px-6 py-2 rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 text-white font-bold shadow-lg hover:from-blue-600 hover:to-emerald-600 focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all duration-150"
+              className="mt-4 px-6 py-3 rounded-lg bg-blue-600 text-white font-semibold shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all duration-150"
             >
-              <Plus className="w-5 h-5 mr-1 inline" /> Schedule New Appointment
+              <Plus className="w-5 h-5 mr-2 inline" /> Schedule New Appointment
             </button>
           )}
         </div>
@@ -282,11 +282,11 @@ const Calendar = ({
     const groupedAppointments = getAppointmentsByType(dateAppointments);
 
     return (
-      <div className="space-y-8">
+      <div className="space-y-6">
         {groupedAppointments.map(({ type, appointments }) => (
-          <div key={type} className="bg-gradient-to-br from-blue-50 via-blue-100 to-green-50 rounded-2xl shadow-lg p-6">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 capitalize">
-              <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="4" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
+          <div key={type} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 capitalize text-gray-900">
+              <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="4" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
               {type} Appointments
             </h3>
             <div className="space-y-4">
@@ -297,19 +297,19 @@ const Calendar = ({
                 return (
                   <div
                     key={appointment.id}
-                    className="bg-white rounded-xl shadow p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-l-4 border-blue-200 hover:shadow-lg transition-all duration-150"
+                    className="bg-gray-50 rounded-lg p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border border-gray-200 hover:shadow-md transition-all duration-150"
                   >
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-bold text-blue-700 flex items-center gap-2 text-lg mb-1">
-                        <Eye className="w-4 h-4 text-blue-400" /> {patient.name}
+                      <h4 className="font-semibold text-gray-900 flex items-center gap-2 text-lg mb-1">
+                        <Eye className="w-4 h-4 text-blue-500" /> {patient.name}
                       </h4>
-                      <div className="flex flex-wrap gap-4 text-sm text-gray-700 mb-1">
-                        <span className="inline-flex items-center gap-1"><svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M16 8v8M8 8v8" /></svg>Time: {appointment.time}</span>
+                      <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-1">
+                        <span className="inline-flex items-center gap-1"><svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M16 8v8M8 8v8" /></svg>Time: {appointment.time}</span>
                         {currentUser?.role === 'support' && appointment.doctors?.users && (
-                          <span className="inline-flex items-center gap-1"><svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M8 12h8" /></svg>Doctor: Dr. {appointment.doctors.users.full_name}{appointment.doctors.specialization && (<span className="text-blue-600 ml-1">- {appointment.doctors.specialization}</span>)}</span>
+                          <span className="inline-flex items-center gap-1"><svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M8 12h8" /></svg>Doctor: Dr. {appointment.doctors.users.full_name}{appointment.doctors.specialization && (<span className="text-blue-600 ml-1">- {appointment.doctors.specialization}</span>)}</span>
                         )}
                         {appointment.notes && (
-                          <span className="inline-flex items-center gap-1"><svg className="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 8v4l3 3" /></svg>Notes: {appointment.notes}</span>
+                          <span className="inline-flex items-center gap-1"><svg className="w-4 h-4 text-yellow-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 8v4l3 3" /></svg>Notes: {appointment.notes}</span>
                         )}
                         {currentUser?.role === 'support' && vitalsByAppointment[appointment.id] && (
                           <span className="inline-block px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold ml-2">Vitals recorded</span>
@@ -324,7 +324,7 @@ const Calendar = ({
                             setSelectedDate(new Date(appointment.date));
                             setShowPatientDetails(true);
                           }}
-                          className="inline-flex items-center gap-1 px-4 py-1 rounded-full font-semibold bg-blue-100 text-blue-700 shadow hover:bg-blue-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                          className="inline-flex items-center gap-1 px-4 py-1 rounded-lg font-semibold bg-blue-100 text-blue-700 hover:bg-blue-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300"
                         >
                           <Eye className="w-4 h-4" />
                           <span>View</span>
@@ -336,7 +336,7 @@ const Calendar = ({
                             setSelectedAppointmentForVitals(appointment);
                             setShowRecordVitalsModal(true);
                           }}
-                          className="inline-flex items-center gap-1 px-4 py-1 rounded-full font-semibold bg-emerald-100 text-emerald-700 shadow hover:bg-emerald-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                          className="inline-flex items-center gap-1 px-4 py-1 rounded-lg font-semibold bg-green-100 text-green-700 hover:bg-green-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-green-300"
                         >
                           <span>Record Vitals</span>
                         </button>
@@ -345,14 +345,14 @@ const Calendar = ({
                         <>
                           <button
                             onClick={() => handleEditAppointment(appointment)}
-                            className="inline-flex items-center gap-1 px-4 py-1 rounded-full font-semibold bg-yellow-100 text-yellow-700 shadow hover:bg-yellow-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                            className="inline-flex items-center gap-1 px-4 py-1 rounded-lg font-semibold bg-yellow-100 text-yellow-700 hover:bg-yellow-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-yellow-300"
                           >
                             <Pencil className="w-4 h-4" />
                             <span>Edit</span>
                           </button>
                           <button
                             onClick={() => handleDeleteAppointment(appointment)}
-                            className="inline-flex items-center gap-1 px-4 py-1 rounded-full font-semibold bg-red-100 text-red-700 shadow hover:bg-red-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-red-300"
+                            className="inline-flex items-center gap-1 px-4 py-1 rounded-lg font-semibold bg-red-100 text-red-700 hover:bg-red-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-red-300"
                           >
                             <Trash2 className="w-4 h-4" />
                             <span>Delete</span>
@@ -370,9 +370,9 @@ const Calendar = ({
           <div className="mt-6">
             <button
               onClick={() => setShowAppointmentScheduler(true)}
-              className="w-full px-6 py-2 rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 text-white font-bold shadow-lg hover:from-blue-600 hover:to-emerald-600 focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all duration-150"
+              className="w-full px-6 py-3 rounded-lg bg-blue-600 text-white font-semibold shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all duration-150"
             >
-              <Plus className="w-5 h-5 mr-1 inline" /> Add Appointment
+              <Plus className="w-5 h-5 mr-2 inline" /> Add Appointment
             </button>
           </div>
         )}
@@ -451,19 +451,11 @@ const Calendar = ({
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow">
-        <div className="bg-gradient-to-r from-blue-100 via-blue-50 to-green-100 rounded-2xl shadow-lg p-6 mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-3">
-              <svg className="w-7 h-7 text-blue-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="4" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
-              <h2 className="text-2xl font-bold text-blue-800 tracking-tight">Calendar</h2>
-            </div>
-          </div>
-        </div>
+      <div className="bg-white rounded-lg shadow-sm">
         <div className="p-4">
           <div className="grid grid-cols-7 gap-2 mb-2">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-              <div key={day} className="text-center font-semibold text-blue-700 py-2 bg-blue-50 rounded-xl shadow-sm tracking-wide uppercase text-xs">
+              <div key={day} className="text-center font-semibold text-gray-700 py-2 bg-gray-50 rounded-lg">
                 {day}
               </div>
             ))}
@@ -471,10 +463,10 @@ const Calendar = ({
               <div key={i}>
                 <button
                   onClick={() => handleDateClick(date)}
-                  className={`w-full h-16 flex flex-col items-center justify-between rounded-2xl shadow-md transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300 border-2
-                    ${selectedDate && date.toDateString() === selectedDate.toDateString() ? 'bg-gradient-to-br from-blue-200 to-emerald-100 border-blue-400 scale-105 text-blue-900 font-bold' :
-                      new Date().toDateString() === date.toDateString() ? 'border-emerald-400 bg-white text-emerald-700 font-semibold' :
-                      'bg-white border-transparent hover:bg-blue-50 text-gray-700'}
+                  className={`w-full h-16 flex flex-col items-center justify-between rounded-lg transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300 border-2
+                    ${selectedDate && date.toDateString() === selectedDate.toDateString() ? 'bg-blue-100 border-blue-400 text-blue-900 font-bold' :
+                      new Date().toDateString() === date.toDateString() ? 'border-blue-400 bg-blue-50 text-blue-700 font-semibold' :
+                      'bg-white border-gray-200 hover:bg-gray-50 text-gray-700'}
                     ${date.getMonth() !== currentMonth.getMonth() ? 'opacity-40' : ''}
                   `}
                   tabIndex={0}
@@ -482,8 +474,8 @@ const Calendar = ({
                 >
                   <span className="text-base mt-2">{date.getDate()}</span>
                   {getAppointmentsForDate(date).length > 0 && (
-                    <span className={`mt-2 px-3 py-0.5 rounded-full text-xs font-semibold shadow-sm
-                      ${selectedDate && date.toDateString() === selectedDate.toDateString() ? 'bg-blue-500 text-white' : 'bg-emerald-200 text-emerald-800'}`}
+                    <span className={`mt-2 px-2 py-0.5 rounded-full text-xs font-semibold
+                      ${selectedDate && date.toDateString() === selectedDate.toDateString() ? 'bg-blue-500 text-white' : 'bg-blue-100 text-blue-700'}`}
                     >
                       {getAppointmentsForDate(date).length} appt
                     </span>
