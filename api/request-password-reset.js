@@ -7,6 +7,8 @@ console.log('Environment variables check:');
 console.log('SUPABASE_URL:', process.env.SUPABASE_URL ? 'SET' : 'NOT SET');
 console.log('SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? 'SET' : 'NOT SET');
 console.log('EMAIL_PROVIDER:', process.env.EMAIL_PROVIDER || 'resend');
+console.log('SENDGRID_API_KEY:', process.env.SENDGRID_API_KEY ? 'SET' : 'NOT SET');
+console.log('Email service provider:', emailService.provider);
 
 // Check if environment variables are available
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
@@ -133,6 +135,7 @@ module.exports = async function handler(req, res) {
       </div>
     `;
 
+    console.log('About to send email using provider:', emailService.provider);
     const emailResult = await emailService.sendEmail(
       email,
       'Password Reset OTP - Pediatrician App',

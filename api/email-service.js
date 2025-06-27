@@ -3,15 +3,20 @@ const nodemailer = require('nodemailer');
 class EmailService {
   constructor() {
     this.provider = process.env.EMAIL_PROVIDER || 'sendgrid';
+    console.log('[EmailService] Initialized with provider:', this.provider);
+    console.log('[EmailService] EMAIL_PROVIDER env var:', process.env.EMAIL_PROVIDER);
+    console.log('[EmailService] SENDGRID_API_KEY available:', !!process.env.SENDGRID_API_KEY);
   }
 
   async sendEmail(to, subject, html, from = null) {
+    console.log('[EmailService] sendEmail called with provider:', this.provider);
     switch (this.provider) {
       case 'sendgrid':
         return this.sendViaSendGrid(to, subject, html, from);
       case 'mailpit':
         return this.sendViaMailpit(to, subject, html, from);
       default:
+        console.log('[EmailService] Using default provider (sendgrid)');
         return this.sendViaSendGrid(to, subject, html, from);
     }
   }
