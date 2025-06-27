@@ -37,14 +37,15 @@ class EmailService {
         }
       });
 
-      // TODO: To use a custom email, set up Sender Authentication in SendGrid:
+      // IMPORTANT: You need to set up Single Sender Verification in SendGrid:
       // 1. Go to SendGrid Dashboard → Settings → Sender Authentication
-      // 2. Choose "Verify a Single Sender" 
-      // 3. Use an email you can access (e.g., ashu15july@gmail.com)
-      // 4. Follow the verification process
-      // 5. Change the email below to your verified email
+      // 2. Click "Verify a Single Sender"
+      // 3. Add "pediacircle@proton.me" as the sender email (ALREADY VERIFIED)
+      // 4. Fill in the required fields (Name, Company, Address, etc.)
+      // 5. Click "Create" and verify the email by clicking the link sent to your Gmail
+      // 6. Once verified, emails will be sent from pediacircle@proton.me
       const info = await transporter.sendMail({
-        from: from || 'noreply@sendgrid.net', // Use SendGrid default for immediate testing
+        from: from || 'pediacircle@proton.me', // Use your verified email
         to: to,
         subject: subject,
         html: html
@@ -74,7 +75,7 @@ class EmailService {
       });
 
       const info = await transporter.sendMail({
-        from: from || 'noreply@sendgrid.net',
+        from: from || 'pediacircle@proton.me',
         to: to,
         subject: subject,
         html: html
