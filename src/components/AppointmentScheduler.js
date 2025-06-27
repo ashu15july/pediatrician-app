@@ -78,13 +78,21 @@ const AppointmentScheduler = ({ patient, onClose, onAppointmentScheduled, defaul
     setError(null);
 
     try {
+      // Ensure the date is properly formatted to avoid timezone issues
+      // The date should be stored as YYYY-MM-DD without time component
+      const formattedDate = selectedDate; // selectedDate is already in YYYY-MM-DD format from the date input
+      
+      console.log('AppointmentScheduler: Submitting appointment with date:', formattedDate);
+      console.log('AppointmentScheduler: Date type:', typeof formattedDate);
+      console.log('AppointmentScheduler: Current timezone offset:', new Date().getTimezoneOffset());
+      
       // Use RPC function to create appointment with proper enum handling
       const { data, error } = await supabase
         .rpc('add_clinic_appointment', {
           clinic_subdomain: clinic.subdomain,
           appointment_patient_id: patient.id,
           appointment_doctor_id: selectedDoctor,
-          appointment_date: selectedDate,
+          appointment_date: formattedDate,
           appointment_time: selectedTime,
           appointment_status: 'scheduled',
           appointment_type: appointmentType,
@@ -100,7 +108,7 @@ const AppointmentScheduler = ({ patient, onClose, onAppointmentScheduled, defaul
         .insert([{
           user_id: doctors.find(d => d.id === selectedDoctor)?.user_id,
           type: 'appointment',
-          message: `New appointment scheduled for ${patient.name} on ${selectedDate} at ${selectedTime}`,
+          message: `New appointment scheduled for ${patient.name} on ${formattedDate} at ${selectedTime}`,
           is_read: false
         }]);
 
@@ -176,7 +184,7 @@ const AppointmentScheduler = ({ patient, onClose, onAppointmentScheduled, defaul
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              min={new Date().toISOString().split('T')[0]}
+              min={new Date().toLocaleDateString('en-CA')}
               className="w-full border rounded-lg px-3 py-2 pl-10"
               required
             />

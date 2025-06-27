@@ -194,7 +194,7 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
           query = query.eq('appointment_id', patient.appointment_id);
         } else {
           // fallback: fetch by date if appointment_id is not available
-          const dateStr = selectedDate.toISOString().split('T')[0];
+          const dateStr = selectedDate.toLocaleDateString('en-CA');
           query = query.gte('recorded_at', dateStr + 'T00:00:00').lte('recorded_at', dateStr + 'T23:59:59');
         }
         const { data, error } = await query.order('recorded_at', { ascending: false }).limit(1);
@@ -218,7 +218,7 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
     // Fetch future appointments for this patient
     const fetchFutureAppointments = async () => {
       if (!patient?.id) return;
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date().toLocaleDateString('en-CA');
       const { data, error } = await supabase
         .from('appointments')
         .select('*')
@@ -388,7 +388,7 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
       const noteData = {
         patient_id: patient.id,
         doctor_id: currentUser.id,
-        visit_date: selectedDate.toISOString().split('T')[0],
+        visit_date: selectedDate.toLocaleDateString('en-CA'),
         visit_type: visitType,
         chief_complaint: chiefComplaint,
         development_status: developmentStatus,

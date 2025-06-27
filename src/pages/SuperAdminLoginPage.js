@@ -51,10 +51,6 @@ export default function SuperAdminLoginPage() {
             Forgot Password?
           </button>
         </div>
-        <div className="mt-4 text-sm text-center text-gray-600">
-          <p>Super Admin Credentials:</p>
-          <p className="font-mono">admin@pediatrician.com / admin123</p>
-        </div>
       </form>
     </div>
   );

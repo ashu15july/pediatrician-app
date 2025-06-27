@@ -49,6 +49,16 @@ const Calendar = ({
   const [vitalsSuccess, setVitalsSuccess] = useState(false);
   const [vitalsByAppointment, setVitalsByAppointment] = useState({});
 
+  // Debug: log when component mounts and appointments are loaded
+  useEffect(() => {
+    console.log('Calendar.js: Component mounted/updated');
+    console.log('Calendar.js: selectedDate:', selectedDate);
+    console.log('Calendar.js: appointments count:', appointments.length);
+    if (appointments.length > 0) {
+      console.log('Calendar.js: First appointment:', appointments[0]);
+    }
+  }, [selectedDate, appointments]);
+
   const getPatientById = (id) => {
     return patients.find(p => p.id === id);
   };
@@ -92,17 +102,49 @@ const Calendar = ({
   };
 
   const getAppointmentsForDate = (date) => {
-    if (!date) return [];
-    const dateString = date.toISOString().split('T')[0];
+    if (!date) {
+      console.log('getAppointmentsForDate: No date provided');
+      return [];
+    }
+    
+    // Convert date to local date string (YYYY-MM-DD)
+    const dateString = date.toLocaleDateString('en-CA'); // en-CA format is YYYY-MM-DD
+    console.log('getAppointmentsForDate: Looking for date:', dateString, 'Total appointments:', appointments.length);
+    
+    // Debug: log the first few appointments to see their date format
+    if (appointments.length > 0) {
+      console.log('getAppointmentsForDate: Sample appointments:', appointments.slice(0, 3).map(a => ({
+        id: a.id,
+        date: a.date,
+        dateType: typeof a.date,
+        dateString: typeof a.date === 'string' ? a.date.split('T')[0] : (a.date instanceof Date ? a.date.toLocaleDateString('en-CA') : 'invalid')
+      })));
+    }
+    
     const filtered = appointments.filter(appointment => {
-      // appointment.date might be 'YYYY-MM-DD' or a Date object
-      // Normalize both sides to 'YYYY-MM-DD'
-      const apptDateString = (typeof appointment.date === 'string')
-        ? appointment.date.split('T')[0]
-        : new Date(appointment.date).toISOString().split('T')[0];
-      return apptDateString === dateString;
+      // Handle different date formats and convert to local date string
+      let apptDateString;
+      if (typeof appointment.date === 'string') {
+        apptDateString = appointment.date.split('T')[0];
+      } else if (appointment.date instanceof Date) {
+        apptDateString = appointment.date.toLocaleDateString('en-CA');
+      } else {
+        console.warn('Appointment has invalid date:', appointment);
+        return false;
+      }
+      
+      const matches = apptDateString === dateString;
+      if (matches) {
+        console.log('getAppointmentsForDate: Found matching appointment:', appointment.id, 'for date:', dateString);
+      }
+      return matches;
     });
-    console.log('getAppointmentsForDate:', { dateString, filtered, all: appointments });
+    
+    console.log('getAppointmentsForDate result:', { 
+      dateString, 
+      found: filtered.length,
+      total: appointments.length
+    });
     return filtered;
   };
 
@@ -260,9 +302,14 @@ const Calendar = ({
   };
 
   const renderAppointments = () => {
-    if (!selectedDate) return null;
+    if (!selectedDate) {
+      console.log('renderAppointments: No selectedDate');
+      return null;
+    }
 
     const dateAppointments = getAppointmentsForDate(selectedDate);
+    console.log('renderAppointments: Found', dateAppointments.length, 'appointments for', selectedDate.toLocaleDateString('en-CA'));
+    
     if (dateAppointments.length === 0) {
       return (
         <div className="text-center py-8">
@@ -270,9 +317,9 @@ const Calendar = ({
           {hasPermission('manage_appointments') && (
             <button
               onClick={() => setShowAppointmentScheduler(true)}
-              className="mt-4 px-6 py-3 rounded-lg bg-blue-600 text-white font-semibold shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all duration-150"
+              className="mt-4 px-6 py-2 rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 text-white font-bold shadow-lg hover:from-blue-600 hover:to-emerald-600 focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all duration-150"
             >
-              <Plus className="w-5 h-5 mr-2 inline" /> Schedule New Appointment
+              <Plus className="w-5 h-5 mr-1 inline" /> Schedule New Appointment
             </button>
           )}
         </div>
@@ -284,9 +331,9 @@ const Calendar = ({
     return (
       <div className="space-y-6">
         {groupedAppointments.map(({ type, appointments }) => (
-          <div key={type} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 capitalize text-gray-900">
-              <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="4" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
+          <div key={type} className="bg-gradient-to-br from-blue-50 via-blue-100 to-green-50 rounded-2xl shadow-lg p-6 border border-blue-200">
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 capitalize text-blue-800">
+              <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="4" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
               {type} Appointments
             </h3>
             <div className="space-y-4">
@@ -297,19 +344,19 @@ const Calendar = ({
                 return (
                   <div
                     key={appointment.id}
-                    className="bg-gray-50 rounded-lg p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border border-gray-200 hover:shadow-md transition-all duration-150"
+                    className="bg-white rounded-xl shadow p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-l-4 border-blue-200 hover:shadow-lg transition-all duration-150"
                   >
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold text-gray-900 flex items-center gap-2 text-lg mb-1">
-                        <Eye className="w-4 h-4 text-blue-500" /> {patient.name}
+                      <h4 className="font-bold text-blue-700 flex items-center gap-2 text-lg mb-1">
+                        <Eye className="w-4 h-4 text-blue-400" /> {patient.name}
                       </h4>
-                      <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-1">
-                        <span className="inline-flex items-center gap-1"><svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M16 8v8M8 8v8" /></svg>Time: {appointment.time}</span>
+                      <div className="flex flex-wrap gap-4 text-sm text-gray-700 mb-1">
+                        <span className="inline-flex items-center gap-1"><svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M16 8v8M8 8v8" /></svg>Time: {appointment.time}</span>
                         {currentUser?.role === 'support' && appointment.doctors?.users && (
-                          <span className="inline-flex items-center gap-1"><svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M8 12h8" /></svg>Doctor: Dr. {appointment.doctors.users.full_name}{appointment.doctors.specialization && (<span className="text-blue-600 ml-1">- {appointment.doctors.specialization}</span>)}</span>
+                          <span className="inline-flex items-center gap-1"><svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M8 12h8" /></svg>Doctor: Dr. {appointment.doctors.users.full_name}{appointment.doctors.specialization && (<span className="text-blue-600 ml-1">- {appointment.doctors.specialization}</span>)}</span>
                         )}
                         {appointment.notes && (
-                          <span className="inline-flex items-center gap-1"><svg className="w-4 h-4 text-yellow-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 8v4l3 3" /></svg>Notes: {appointment.notes}</span>
+                          <span className="inline-flex items-center gap-1"><svg className="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 8v4l3 3" /></svg>Notes: {appointment.notes}</span>
                         )}
                         {currentUser?.role === 'support' && vitalsByAppointment[appointment.id] && (
                           <span className="inline-block px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold ml-2">Vitals recorded</span>
@@ -324,7 +371,7 @@ const Calendar = ({
                             setSelectedDate(new Date(appointment.date));
                             setShowPatientDetails(true);
                           }}
-                          className="inline-flex items-center gap-1 px-4 py-1 rounded-lg font-semibold bg-blue-100 text-blue-700 hover:bg-blue-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                          className="inline-flex items-center gap-1 px-4 py-1 rounded-full font-semibold bg-blue-100 text-blue-700 shadow hover:bg-blue-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300"
                         >
                           <Eye className="w-4 h-4" />
                           <span>View</span>
@@ -336,7 +383,7 @@ const Calendar = ({
                             setSelectedAppointmentForVitals(appointment);
                             setShowRecordVitalsModal(true);
                           }}
-                          className="inline-flex items-center gap-1 px-4 py-1 rounded-lg font-semibold bg-green-100 text-green-700 hover:bg-green-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-green-300"
+                          className="inline-flex items-center gap-1 px-4 py-1 rounded-full font-semibold bg-emerald-100 text-emerald-700 shadow hover:bg-emerald-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-emerald-300"
                         >
                           <span>Record Vitals</span>
                         </button>
@@ -345,14 +392,14 @@ const Calendar = ({
                         <>
                           <button
                             onClick={() => handleEditAppointment(appointment)}
-                            className="inline-flex items-center gap-1 px-4 py-1 rounded-lg font-semibold bg-yellow-100 text-yellow-700 hover:bg-yellow-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                            className="inline-flex items-center gap-1 px-4 py-1 rounded-full font-semibold bg-yellow-100 text-yellow-700 shadow hover:bg-yellow-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-yellow-300"
                           >
                             <Pencil className="w-4 h-4" />
                             <span>Edit</span>
                           </button>
                           <button
                             onClick={() => handleDeleteAppointment(appointment)}
-                            className="inline-flex items-center gap-1 px-4 py-1 rounded-lg font-semibold bg-red-100 text-red-700 hover:bg-red-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-red-300"
+                            className="inline-flex items-center gap-1 px-4 py-1 rounded-full font-semibold bg-red-100 text-red-700 shadow hover:bg-red-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-red-300"
                           >
                             <Trash2 className="w-4 h-4" />
                             <span>Delete</span>
@@ -370,9 +417,9 @@ const Calendar = ({
           <div className="mt-6">
             <button
               onClick={() => setShowAppointmentScheduler(true)}
-              className="w-full px-6 py-3 rounded-lg bg-blue-600 text-white font-semibold shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all duration-150"
+              className="w-full px-6 py-2 rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 text-white font-bold shadow-lg hover:from-blue-600 hover:to-emerald-600 focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all duration-150"
             >
-              <Plus className="w-5 h-5 mr-2 inline" /> Add Appointment
+              <Plus className="w-5 h-5 mr-1 inline" /> Add Appointment
             </button>
           </div>
         )}
@@ -390,72 +437,64 @@ const Calendar = ({
   return (
     <div className="space-y-6">
       {/* Role-based header */}
-      <div className="bg-white rounded-lg shadow-sm p-4 border-l-4 border-blue-500">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">
-              {currentUser?.role === 'doctor' ? 'My Appointments' : 
-               currentUser?.role === 'admin' ? 'All Clinic Appointments' :
-               currentUser?.role === 'support' ? 'All Clinic Appointments' : 'Appointments'}
-            </h2>
-            <p className="text-sm text-gray-600 mt-1">
-              {currentUser?.role === 'doctor' ? 'Showing only your scheduled appointments' :
-               currentUser?.role === 'admin' ? 'Showing all appointments in the clinic' :
-               currentUser?.role === 'support' ? 'Showing all appointments in the clinic' : 'Appointments'}
-            </p>
-          </div>
-          <div className="text-right">
-            <div className="text-sm font-medium text-gray-900">{currentUser?.full_name}</div>
-            <div className="text-xs text-gray-500 capitalize">{currentUser?.role}</div>
-          </div>
+      <div className="bg-gradient-to-r from-blue-100 via-blue-50 to-green-100 rounded-2xl shadow-lg p-6 flex flex-col md:flex-row items-center justify-between gap-4 border border-blue-200">
+        <div className="flex items-center gap-3">
+          <svg className="w-7 h-7 text-blue-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="4" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
+          <h2 className="text-2xl font-bold text-blue-800 tracking-tight">
+            {currentUser?.role === 'doctor' ? 'My Appointments' : 
+             currentUser?.role === 'admin' ? 'All Clinic Appointments' :
+             currentUser?.role === 'support' ? 'All Clinic Appointments' : 'Appointments'}
+          </h2>
+        </div>
+        <div className="text-right">
+          <div className="text-sm font-medium text-blue-900">{currentUser?.full_name}</div>
+          <div className="text-xs text-blue-600 capitalize">{currentUser?.role}</div>
         </div>
       </div>
 
       {/* Calendar Header */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => {
-                const newMonth = new Date(currentMonth);
-                newMonth.setMonth(newMonth.getMonth() - 1);
-                setCurrentMonth(newMonth);
-              }}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <h1 className="text-2xl font-bold text-gray-900">
-              {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-            </h1>
-            <button
-              onClick={() => {
-                const newMonth = new Date(currentMonth);
-                newMonth.setMonth(newMonth.getMonth() + 1);
-                setCurrentMonth(newMonth);
-              }}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
-          {hasPermission('manage_appointments') && (
-            <button
-              onClick={() => setShowAppointmentScheduler(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Schedule Appointment</span>
-            </button>
-          )}
+      <div className="bg-gradient-to-r from-blue-100 via-blue-50 to-green-100 rounded-2xl shadow-lg p-6 flex flex-col md:flex-row items-center justify-between gap-4 border border-blue-200">
+        <div className="flex items-center space-x-4">
+          <button
+            onClick={() => {
+              const newMonth = new Date(currentMonth);
+              newMonth.setMonth(newMonth.getMonth() - 1);
+              setCurrentMonth(newMonth);
+            }}
+            className="p-2 hover:bg-blue-200 rounded-lg transition-colors"
+          >
+            <ChevronLeft className="w-5 h-5 text-blue-700" />
+          </button>
+          <h1 className="text-2xl font-bold text-blue-800">
+            {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+          </h1>
+          <button
+            onClick={() => {
+              const newMonth = new Date(currentMonth);
+              newMonth.setMonth(newMonth.getMonth() + 1);
+              setCurrentMonth(newMonth);
+            }}
+            className="p-2 hover:bg-blue-200 rounded-lg transition-colors"
+          >
+            <ChevronRight className="w-5 h-5 text-blue-700" />
+          </button>
         </div>
+        {hasPermission('manage_appointments') && (
+          <button
+            onClick={() => setShowAppointmentScheduler(true)}
+            className="bg-gradient-to-r from-blue-500 to-emerald-500 text-white px-6 py-2 rounded-full font-bold shadow-lg hover:from-blue-600 hover:to-emerald-600 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-300"
+          >
+            <Plus className="w-4 h-4 mr-2 inline" />
+            <span>Schedule Appointment</span>
+          </button>
+        )}
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm">
-        <div className="p-4">
+      <div className="bg-white rounded-2xl shadow-lg border border-blue-100">
+        <div className="p-6">
           <div className="grid grid-cols-7 gap-2 mb-2">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-              <div key={day} className="text-center font-semibold text-gray-700 py-2 bg-gray-50 rounded-lg">
+              <div key={day} className="text-center font-semibold text-blue-700 py-2 bg-blue-50 rounded-xl shadow-sm tracking-wide uppercase text-xs">
                 {day}
               </div>
             ))}
@@ -463,10 +502,10 @@ const Calendar = ({
               <div key={i}>
                 <button
                   onClick={() => handleDateClick(date)}
-                  className={`w-full h-16 flex flex-col items-center justify-between rounded-lg transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300 border-2
-                    ${selectedDate && date.toDateString() === selectedDate.toDateString() ? 'bg-blue-100 border-blue-400 text-blue-900 font-bold' :
-                      new Date().toDateString() === date.toDateString() ? 'border-blue-400 bg-blue-50 text-blue-700 font-semibold' :
-                      'bg-white border-gray-200 hover:bg-gray-50 text-gray-700'}
+                  className={`w-full h-16 flex flex-col items-center justify-between rounded-2xl shadow-md transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300 border-2
+                    ${selectedDate && date.toDateString() === selectedDate.toDateString() ? 'bg-gradient-to-br from-blue-200 to-emerald-100 border-blue-400 scale-105 text-blue-900 font-bold' :
+                      new Date().toDateString() === date.toDateString() ? 'border-emerald-400 bg-white text-emerald-700 font-semibold' :
+                      'bg-white border-transparent hover:bg-blue-50 text-gray-700'}
                     ${date.getMonth() !== currentMonth.getMonth() ? 'opacity-40' : ''}
                   `}
                   tabIndex={0}
@@ -474,8 +513,8 @@ const Calendar = ({
                 >
                   <span className="text-base mt-2">{date.getDate()}</span>
                   {getAppointmentsForDate(date).length > 0 && (
-                    <span className={`mt-2 px-2 py-0.5 rounded-full text-xs font-semibold
-                      ${selectedDate && date.toDateString() === selectedDate.toDateString() ? 'bg-blue-500 text-white' : 'bg-blue-100 text-blue-700'}`}
+                    <span className={`mt-2 px-3 py-0.5 rounded-full text-xs font-semibold shadow-sm
+                      ${selectedDate && date.toDateString() === selectedDate.toDateString() ? 'bg-blue-500 text-white' : 'bg-emerald-200 text-emerald-800'}`}
                     >
                       {getAppointmentsForDate(date).length} appt
                     </span>
@@ -487,8 +526,8 @@ const Calendar = ({
         </div>
 
         {selectedDate && (
-          <div className="border-t p-4">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <div className="border-t border-blue-100 p-6">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-blue-800">
               <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="4" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
               {selectedDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </h3>

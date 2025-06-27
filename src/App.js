@@ -21,7 +21,13 @@ function ClinicAppContent() {
   const { currentUser: clinicUser, isLoggedIn: isClinicLoggedIn, loading: clinicLoading } = useClinicAuth();
   console.log('ClinicAppContent: Clinic Auth state - clinicUser:', clinicUser, 'isClinicLoggedIn:', isClinicLoggedIn, 'clinicLoading:', clinicLoading);
   
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const today = new Date();
+    // Set to start of day in local timezone
+    today.setHours(0, 0, 0, 0);
+    console.log('App.js: Initializing selectedDate to:', today);
+    return today;
+  });
   const [appointments, setAppointments] = useState([]);
   const [error, setError] = useState(null);
   const [currentView, setCurrentView] = useState('calendar');
@@ -57,8 +63,15 @@ function ClinicAppContent() {
 
   // Load appointments after patients and doctors are loaded
   useEffect(() => {
+    console.log('App.js useEffect: Checking if should load appointments:', {
+      isActiveLoggedIn,
+      clinicSubdomain,
+      patientsLength: patients.length,
+      doctorsLength: doctors.length
+    });
+    
     if (isActiveLoggedIn && clinicSubdomain && patients.length > 0 && doctors.length > 0) {
-      console.log('ClinicAppContent useEffect: Loading appointments after data is ready');
+      console.log('App.js useEffect: Loading appointments after data is ready');
       loadAppointments();
     }
   }, [isActiveLoggedIn, clinicSubdomain, patients.length, doctors.length]);
@@ -70,10 +83,14 @@ function ClinicAppContent() {
   }, [patients, doctors]);
 
   const loadAppointments = async () => {
-    if (!clinicSubdomain) return;
+    if (!clinicSubdomain) {
+      console.log('loadAppointments: No clinic subdomain, skipping');
+      return;
+    }
     
     try {
       setError(null);
+      console.log('loadAppointments: Starting to load appointments for clinic:', clinicSubdomain);
       
       // Determine which function to use based on user role
       let functionName = 'get_clinic_appointments'; // Default function that handles role-based access
@@ -99,6 +116,7 @@ function ClinicAppContent() {
 
       if (error) throw error;
       console.log('Loaded appointments for role', activeUser?.role, ':', data);
+      console.log('Setting appointments state with:', data);
       setAppointments(data || []);
     } catch (err) {
       console.error('Error loading appointments:', err);
@@ -178,7 +196,16 @@ function ClinicAppContent() {
 
   // Add a separate effect for date changes
   useEffect(() => {
+    console.log('App.js date change useEffect: Checking if should reload appointments:', {
+      isActiveLoggedIn,
+      clinicSubdomain,
+      patientsLength: patients.length,
+      doctorsLength: doctors.length,
+      selectedDate
+    });
+    
     if (isActiveLoggedIn && clinicSubdomain && patients.length > 0 && doctors.length > 0) {
+      console.log('App.js date change useEffect: Reloading appointments for date:', selectedDate);
       loadAppointments();
     }
   }, [selectedDate, isActiveLoggedIn, clinicSubdomain, patients.length, doctors.length]);
@@ -198,7 +225,7 @@ function ClinicAppContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-emerald-50">
       <MainLayout currentView={currentView} setCurrentView={setCurrentView} currentUser={activeUser}>
         <div className="container mx-auto px-4 py-8">
           {currentView === 'calendar' && (

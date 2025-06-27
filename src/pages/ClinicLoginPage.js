@@ -156,25 +156,6 @@ export default function ClinicLoginPage() {
             Forgot Password?
           </button>
         </div>
-        
-        {clinicInfo && clinicInfo.credentials.length > 0 && (
-          <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-            <h4 className="font-semibold text-gray-700 dark:text-gray-300 mb-3 text-center">Available Users</h4>
-            <div className="space-y-2">
-              {clinicInfo.credentials.map((cred, index) => (
-                <div key={index} className="text-sm">
-                  <span className="font-medium text-gray-700 dark:text-gray-300">{cred.role}:</span>
-                  <div className="font-mono text-xs text-gray-600 dark:text-gray-400 ml-2">
-                    {cred.email}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
-              Contact your administrator for login credentials
-            </p>
-          </div>
-        )}
       </form>
     </div>
   );

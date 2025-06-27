@@ -39,7 +39,7 @@ const MonthCalendar = ({ selectedDate, setSelectedDate, appointments }) => {
       selectedDate.getMonth(),
       day
     );
-    const dateStr = currentDate.toISOString().split('T')[0];
+    const dateStr = currentDate.toLocaleDateString('en-CA');
     const hasAppointments = appointments.some(apt => apt.date === dateStr);
 
     days.push({

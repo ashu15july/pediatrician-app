@@ -95,7 +95,7 @@ const DateAppointmentScheduler = ({
       const { data: existingAppointments, error: checkError } = await supabase
         .from('appointments')
         .select('*')
-        .eq('date', selectedDate.toISOString().split('T')[0])
+        .eq('date', selectedDate.toLocaleDateString('en-CA'))
         .eq('time', timeSlot)
         .eq('doctor_id', selectedDoctor);
 
@@ -110,10 +110,12 @@ const DateAppointmentScheduler = ({
         throw new Error('This time slot is already booked for the selected doctor');
       }
 
-      // Always use 'YYYY-MM-DD' format for the date
+      // Always use 'YYYY-MM-DD' format for the date in local timezone
       const appointmentDateString = selectedDate instanceof Date
-        ? selectedDate.toISOString().split('T')[0]
+        ? selectedDate.toLocaleDateString('en-CA') // en-CA format is YYYY-MM-DD
         : selectedDate;
+
+      console.log('DateAppointmentScheduler: Submitting appointment with date:', appointmentDateString);
 
       const appointmentData = {
         patient_id: selectedPatient.id,
