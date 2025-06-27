@@ -37,8 +37,14 @@ class EmailService {
         }
       });
 
+      // TODO: To use a custom email, set up Sender Authentication in SendGrid:
+      // 1. Go to SendGrid Dashboard → Settings → Sender Authentication
+      // 2. Choose "Verify a Single Sender" 
+      // 3. Use an email you can access (e.g., ashu15july@gmail.com)
+      // 4. Follow the verification process
+      // 5. Change the email below to your verified email
       const info = await transporter.sendMail({
-        from: from || 'noreply@pediacircle.com',
+        from: from || 'noreply@sendgrid.net', // Use SendGrid default for immediate testing
         to: to,
         subject: subject,
         html: html
@@ -68,7 +74,7 @@ class EmailService {
       });
 
       const info = await transporter.sendMail({
-        from: from || 'noreply@pediacircle.com',
+        from: from || 'noreply@sendgrid.net',
         to: to,
         subject: subject,
         html: html
