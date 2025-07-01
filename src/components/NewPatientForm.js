@@ -162,7 +162,10 @@ const NewPatientForm = ({ onClose, onPatientAdded, editingPatient }) => {
             patient_address: patientData.address,
             patient_blood_group: patientData.blood_group,
             patient_allergies: patientData.allergies,
-            patient_medical_history: patientData.medical_history
+            patient_medical_history: patientData.medical_history,
+            patient_delivery_type: patientData.delivery_type,
+            patient_birth_term: patientData.birth_term,
+            patient_gestational_age_weeks: patientData.gestational_age_weeks
           });
         
         patient = data;

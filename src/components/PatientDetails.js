@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Plus, FileText, Calendar, User, Phone, MapPin, Heart, AlertTriangle, Check, Clock, Edit, Trash2, Activity, Syringe } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { X, Plus, FileText, Calendar, User, Phone, MapPin, Heart, AlertTriangle, Check, Clock, Edit, Trash2, Activity, Syringe, ChevronUp, ChevronDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useClinicAuth } from '../contexts/ClinicAuthContext';
 import { addVisitNote, getVisitNotes } from '../services/patientService';
@@ -107,13 +107,19 @@ const scatterData = [
   { x: 110, y: 280 },
 ];
 
+// Helper to capitalize first letter
+function capitalize(str) {
+  if (!str) return '';
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+}
+
 const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled, onUpdate, onDelete }) => {
+  // Determine which permission function to use
   const { hasPermission: authHasPermission, currentUser: authUser } = useAuth();
   const { hasPermission: clinicHasPermission, currentUser: clinicUser } = useClinicAuth();
-  
-  // Determine which permission function to use
   const hasPermission = clinicUser ? clinicHasPermission : authHasPermission;
-  const currentUser = clinicUser || authUser;
+  const activeUser = clinicUser || authUser;
+  const isSupportUser = activeUser?.role === 'support';
   const [newNote, setNewNote] = useState('');
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -161,7 +167,7 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
 
   const [editingMedicalHistory, setEditingMedicalHistory] = useState(false);
   const [medicalHistoryDraft, setMedicalHistoryDraft] = useState(patient.medical_history || '');
-  const canEditMedicalHistory = hasPermission;
+  const canEditMedicalHistory = hasPermission && activeUser?.role !== 'support';
 
   const [followUpRequired, setFollowUpRequired] = useState(false);
   const [followUpConfirmation, setFollowUpConfirmation] = useState('');
@@ -176,14 +182,38 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
 
   const { clinic } = useClinic();
 
+  const [savingNote, setSavingNote] = useState(false);
+
+  // 1. Add a collapsible state for the vitals section
+  const [expandedVitals, setExpandedVitals] = useState(true);
+
+  const loadNotes = useCallback(async () => {
+    if (!patient?.id || !clinic?.id) {
+      console.error('No patient ID or clinic ID available');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await getVisitNotes(patient.id, clinic.id);
+      setNotes(data);
+    } catch (err) {
+      console.error('Error loading notes:', err);
+      setError('Failed to load visit notes. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [patient?.id, clinic?.id]);
+
   useEffect(() => {
     if (patient?.id) {
       loadNotes();
     }
-  }, [patient?.id]);
+  }, [patient?.id, loadNotes]);
 
   useEffect(() => {
-    if (patient?.id && selectedDate && currentUser?.role === 'doctor') {
+    if (patient?.id && selectedDate && activeUser?.role === 'doctor') {
       // Fetch latest vitals for this patient and appointment (if available)
       const fetchVitals = async () => {
         let query = supabase
@@ -212,60 +242,41 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
       };
       fetchVitals();
     }
-  }, [patient?.id, patient?.appointment_id, selectedDate, currentUser?.role]);
+  }, [patient?.id, patient?.appointment_id, selectedDate, activeUser?.role]);
 
-  useEffect(() => {
-    // Fetch future appointments for this patient
-    const fetchFutureAppointments = async () => {
-      if (!patient?.id) return;
-      const today = new Date().toLocaleDateString('en-CA');
-      const { data, error } = await supabase
-        .from('appointments')
-        .select('*')
-        .eq('patient_id', patient.id)
-        .gte('date', today)
-        .order('date', { ascending: true });
-      if (!error && data) {
-        setFutureAppointments(data);
-      }
-    };
-    fetchFutureAppointments();
-  }, [patient?.id, showAppointmentScheduler]);
-
-  useEffect(() => {
-    // Fetch all vitals for this patient for growth chart
-    const fetchVitalsHistory = async () => {
-      if (!patient?.id) return;
-      const { data, error } = await supabase
-        .from('patient_vitals')
-        .select('*')
-        .eq('patient_id', patient.id)
-        .order('recorded_at', { ascending: true });
-      if (!error && data) {
-        setVitalsHistory(data);
-      }
-    };
-    fetchVitalsHistory();
+  const fetchFutureAppointments = useCallback(async () => {
+    if (!patient?.id) return;
+    const today = new Date().toLocaleDateString('en-CA');
+    const { data, error } = await supabase
+      .from('appointments')
+      .select('*')
+      .eq('patient_id', patient.id)
+      .gte('date', today)
+      .order('date', { ascending: true });
+    if (!error && data) {
+      setFutureAppointments(data);
+    }
   }, [patient?.id]);
 
-  const loadNotes = async () => {
-    if (!patient?.id || !clinic?.id) {
-      console.error('No patient ID or clinic ID available');
-      return;
+  useEffect(() => {
+    fetchFutureAppointments();
+  }, [fetchFutureAppointments]);
+
+  const fetchVitalsHistory = useCallback(async () => {
+    if (!patient?.id) return;
+    const { data, error } = await supabase
+      .from('patient_vitals')
+      .select('*')
+      .eq('patient_id', patient.id)
+      .order('recorded_at', { ascending: true });
+    if (!error && data) {
+      setVitalsHistory(data);
     }
-    
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await getVisitNotes(patient.id, clinic.id);
-      setNotes(data);
-    } catch (err) {
-      console.error('Error loading notes:', err);
-      setError('Failed to load visit notes. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [patient?.id]);
+
+  useEffect(() => {
+    fetchVitalsHistory();
+  }, [fetchVitalsHistory]);
 
   const validateVitals = (values) => {
     const validated = { ...values };
@@ -356,6 +367,7 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
 
   const handleAddNote = async (e) => {
     e.preventDefault();
+    setSavingNote(true);
 
     // Check if there are any warnings
     const hasWarnings = Object.values(vitalWarnings).some(warning => warning !== '');
@@ -370,7 +382,7 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
       return;
     }
 
-    if (!currentUser?.id) {
+    if (!activeUser?.id) {
       setError('User information is missing. Please log in again.');
       return;
     }
@@ -387,7 +399,8 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
       const validatedVitals = validateVitals(vitals);
       const noteData = {
         patient_id: patient.id,
-        doctor_id: currentUser.id,
+        user_id: activeUser.id, // was doctor_id
+        clinic_id: clinic?.id,
         visit_date: selectedDate.toLocaleDateString('en-CA'),
         visit_type: visitType,
         chief_complaint: chiefComplaint,
@@ -414,19 +427,33 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
 
       await addVisitNote(noteData);
       
+      // Debug log for appointment_id
+      console.log('handleAddNote: patient.appointment_id =', patient.appointment_id);
+      // Update appointment status to 'completed' if there's an appointment_id
+      if (patient.appointment_id) {
+        const { error: appointmentError } = await supabase
+          .from('appointments')
+          .update({ status: 'completed' })
+          .eq('id', patient.appointment_id);
+        
+        if (appointmentError) {
+          console.error('Error updating appointment status:', appointmentError);
+        }
+      }
+      
       // Auto-create follow-up appointment if followUpDate is filled
       if (followUpDate) {
         const { error: apptError } = await supabase.from('appointments').insert([
           {
             patient_id: patient.id,
-            doctor_id: currentUser.id,
+            doctor_id: activeUser.id,
             date: followUpDate,
             time: '09:00', // default time, can be changed
             status: 'scheduled',
             type: 'followup',
             reason: 'Follow-up',
             notes: followUpNotes || null,
-            created_by: currentUser.id,
+            created_by: activeUser.id,
             created_at: new Date().toISOString()
           }
         ]);
@@ -473,9 +500,16 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
       });
       
       await loadNotes();
+      
+      // Refresh appointments to show updated status and new follow-up
+      if (onAppointmentScheduled) {
+        await onAppointmentScheduled();
+      }
     } catch (err) {
       console.error('Error adding note:', err);
       setError('Failed to add note. Please try again.');
+    } finally {
+      setSavingNote(false);
     }
   };
 
@@ -514,9 +548,6 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
   const starWeight = vitals.weight ? parseFloat(vitals.weight) : null;
   const starHeight = vitals.height ? parseFloat(vitals.height) : null;
 
-  // Add logging for star marker values
-  console.log('Star Age (months):', starAgeMonths, 'Star Weight:', starWeight, 'Star Height:', starHeight);
-
   // Move these before the return statement:
   console.log('Scatter Weight Data:', { ageMonths: starAgeMonths, patient: starWeight });
   console.log('Scatter Height Data:', { ageMonths: starAgeMonths, patient: starHeight });
@@ -546,7 +577,7 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
 👶 *Visit Note for ${patient.name}*
 
 *Date:* ${note.visit_date}
-*Doctor:* ${note.doctors?.users?.full_name || 'Unknown'}
+*Doctor:* ${note.doctor?.full_name || 'Unknown'}
 *Chief Complaint:* ${note.chief_complaint || 'N/A'}
 *Diagnosis:* ${note.diagnosis || 'N/A'}
 *Treatment Plan:* ${note.treatment_plan?.medications || 'N/A'}
@@ -613,35 +644,35 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
               </div>
             </div>
             <div className="space-y-3">
-              {patient.delivery_type && (
-                <div className="flex items-center gap-2">
-                  <Heart className="h-5 w-5 text-pink-400" />
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-300">Delivery Type</p>
-                    <p className="font-medium text-gray-700 dark:text-gray-200">
-                      {patient.delivery_type === 'normal' ? 'Normal Delivery' : 'C-Section'}
-                    </p>
-                  </div>
+              {/* Delivery Type - always show */}
+              <div className="flex items-center gap-2">
+                <Heart className="h-5 w-5 text-pink-400" />
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-300">Delivery Type</p>
+                  <p className="font-medium text-gray-700 dark:text-gray-200">
+                    {patient.delivery_type
+                      ? capitalize(patient.delivery_type.replace(/_/g, ' '))
+                      : <span className="text-gray-400">Not recorded</span>}
+                  </p>
                 </div>
-              )}
-              {patient.birth_term && (
-                <div className="flex items-center gap-2">
-                  <Heart className="h-5 w-5 text-pink-400" />
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-300">Birth Term</p>
-                    <p className="font-medium text-gray-700 dark:text-gray-200">
-                      {patient.birth_term === 'full_term' && 'Full Term (37-42 weeks)'}
-                      {patient.birth_term === 'premature' && 'Premature (<37 weeks)'}
-                      {patient.birth_term === 'postmature' && 'Postmature (>42 weeks)'}
-                      {patient.gestational_age_weeks && (
-                        <span className="text-blue-600 ml-1">
-                          ({patient.gestational_age_weeks} weeks)
-                        </span>
-                      )}
-                    </p>
-                  </div>
+              </div>
+              {/* Birth Term - always show */}
+              <div className="flex items-center gap-2">
+                <Heart className="h-5 w-5 text-pink-400" />
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-300">Birth Term</p>
+                  <p className="font-medium text-gray-700 dark:text-gray-200">
+                    {patient.birth_term
+                      ? capitalize(patient.birth_term.replace(/_/g, ' '))
+                      : <span className="text-gray-400">Not recorded</span>}
+                    {patient.gestational_age_weeks && (
+                      <span className="text-blue-600 ml-1">
+                        ({patient.gestational_age_weeks} weeks)
+                      </span>
+                    )}
+                  </p>
                 </div>
-              )}
+              </div>
               <div className="flex items-center gap-2">
                 <MapPin className="h-5 w-5 text-blue-400" />
                 <div>
@@ -916,291 +947,324 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
             </div>
           </div>
 
-          {/* Add New Note */}
-          <div className="mb-10">
-            {followUpConfirmation && (
-              <div className="mb-4 p-3 bg-green-100 text-green-800 rounded-lg text-center font-semibold">
-                {followUpConfirmation}
-              </div>
-            )}
-            <div className="bg-gradient-to-br from-blue-50 to-emerald-50 dark:from-gray-900 dark:to-gray-800 border-l-4 border-blue-400 rounded-2xl p-8 shadow mb-6">
-              <h3 className="text-lg font-semibold mb-4 text-blue-800 dark:text-blue-200 flex items-center gap-2"><Plus className="w-5 h-5 text-blue-400" />Add Visit Note</h3>
-              <form onSubmit={handleAddNote} className="space-y-8">
-                {/* Visit Type */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2"><Calendar className="w-4 h-4 text-blue-400" />Visit Type</label>
-                  <div className="flex space-x-4">
-                    {['New', 'Follow-Up', 'Vaccination'].map((type) => (
-                      <label key={type} className="inline-flex items-center">
+          {!isSupportUser && (
+            <div className="mb-10">
+              {followUpConfirmation && (
+                <div className="mb-4 p-3 bg-green-100 text-green-800 rounded-lg text-center font-semibold">
+                  {followUpConfirmation}
+                </div>
+              )}
+              <div className="bg-gradient-to-br from-blue-50 to-emerald-50 dark:from-gray-900 dark:to-gray-800 border-l-4 border-blue-400 rounded-2xl p-8 shadow mb-6">
+                <h3 className="text-lg font-semibold mb-4 text-blue-800 dark:text-blue-200 flex items-center gap-2"><Plus className="w-5 h-5 text-blue-400" />Add Visit Note</h3>
+                <form onSubmit={handleAddNote} className="space-y-8">
+                  {/* Visit Type */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2"><Calendar className="w-4 h-4 text-blue-400" />Visit Type</label>
+                    <div className="flex space-x-4">
+                      {['New', 'Follow-Up', 'Vaccination'].map((type) => (
+                        <label key={type} className="inline-flex items-center">
+                          <input
+                            type="radio"
+                            value={type}
+                            checked={visitType === type}
+                            onChange={(e) => setVisitType(e.target.value)}
+                            className="form-radio h-4 w-4 text-blue-600 dark:text-blue-300"
+                          />
+                          <span className="ml-2 text-gray-700 dark:text-gray-200">{type}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Chief Complaint */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-rose-400" />Chief Complaint <span className="text-gray-500 dark:text-gray-300">(Parent's or child's main concern)</span></label>
+                    <textarea
+                      value={chiefComplaint}
+                      onChange={(e) => setChiefComplaint(e.target.value)}
+                      className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                      rows="2"
+                      placeholder="e.g., Fever since 2 days, Cough and cold, Routine check-up"
+                    />
+                  </div>
+
+                  {/* Development */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2"><User className="w-4 h-4 text-emerald-400" />Development</label>
+                    <div className="space-y-2 flex flex-row items-center gap-6">
+                      <label className="inline-flex items-center">
                         <input
                           type="radio"
-                          value={type}
-                          checked={visitType === type}
-                          onChange={(e) => setVisitType(e.target.value)}
-                          className="form-radio h-4 w-4 text-blue-600 dark:text-blue-300"
+                          value="Normal"
+                          checked={developmentStatus === 'Normal'}
+                          onChange={(e) => setDevelopmentStatus(e.target.value)}
+                          className="form-radio h-4 w-4 text-emerald-600 dark:text-emerald-300"
                         />
-                        <span className="ml-2 text-gray-700 dark:text-gray-200">{type}</span>
+                        <span className="ml-2 text-gray-700 dark:text-gray-200">Normal</span>
                       </label>
-                    ))}
+                      <label className="inline-flex items-center">
+                        <input
+                          type="radio"
+                          value="Delay"
+                          checked={developmentStatus === 'Delay'}
+                          onChange={(e) => setDevelopmentStatus(e.target.value)}
+                          className="form-radio h-4 w-4 text-rose-600"
+                        />
+                        <span className="ml-2 text-gray-700 dark:text-gray-200">Delay</span>
+                      </label>
+                      {developmentStatus === 'Delay' && (
+                        <input
+                          type="text"
+                          value={developmentDelayDetails}
+                          onChange={(e) => setDevelopmentDelayDetails(e.target.value)}
+                          className="ml-4 rounded-lg border-gray-300 shadow-sm focus:border-rose-500 focus:ring-2 focus:ring-rose-200"
+                          placeholder="Specify: speech/motor/cognitive"
+                        />
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                {/* Chief Complaint */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-rose-400" />Chief Complaint <span className="text-gray-500 dark:text-gray-300">(Parent's or child's main concern)</span></label>
-                  <textarea
-                    value={chiefComplaint}
-                    onChange={(e) => setChiefComplaint(e.target.value)}
-                    className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                    rows="2"
-                    placeholder="e.g., Fever since 2 days, Cough and cold, Routine check-up"
-                  />
-                </div>
-
-                {/* Development */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2"><User className="w-4 h-4 text-emerald-400" />Development</label>
-                  <div className="space-y-2 flex flex-row items-center gap-6">
-                    <label className="inline-flex items-center">
-                      <input
-                        type="radio"
-                        value="Normal"
-                        checked={developmentStatus === 'Normal'}
-                        onChange={(e) => setDevelopmentStatus(e.target.value)}
-                        className="form-radio h-4 w-4 text-emerald-600 dark:text-emerald-300"
-                      />
-                      <span className="ml-2 text-gray-700 dark:text-gray-200">Normal</span>
-                    </label>
-                    <label className="inline-flex items-center">
-                      <input
-                        type="radio"
-                        value="Delay"
-                        checked={developmentStatus === 'Delay'}
-                        onChange={(e) => setDevelopmentStatus(e.target.value)}
-                        className="form-radio h-4 w-4 text-rose-600"
-                      />
-                      <span className="ml-2 text-gray-700 dark:text-gray-200">Delay</span>
-                    </label>
-                    {developmentStatus === 'Delay' && (
-                      <input
-                        type="text"
-                        value={developmentDelayDetails}
-                        onChange={(e) => setDevelopmentDelayDetails(e.target.value)}
-                        className="ml-4 rounded-lg border-gray-300 shadow-sm focus:border-rose-500 focus:ring-2 focus:ring-rose-200"
-                        placeholder="Specify: speech/motor/cognitive"
-                      />
-                    )}
-                  </div>
-                </div>
-
-                {/* Physical Exam */}
-                <div>
-                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2"><Heart className="w-4 h-4 text-pink-400" />Physical Exam Summary</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {[
-                      { key: 'general', label: 'General', options: ['Active', 'Dull'] },
-                      { key: 'chest_lungs', label: 'Chest/Lungs', options: ['Clear', 'Congested'] },
-                      { key: 'abdomen', label: 'Abdomen', options: ['Soft', 'Tender'] },
-                      { key: 'skin', label: 'Skin', options: ['Normal', 'Rashes'] },
-                      { key: 'ent', label: 'ENT', options: ['Normal', 'Infection'] }
-                    ].map(({ key, label, options }) => (
-                      <div key={key} className="space-y-2">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2"><Check className="w-4 h-4 text-blue-400" />{label}</label>
-                        <div className="flex space-x-4">
-                          {options.map((option) => (
-                            <label key={option} className="inline-flex items-center">
-                              <input
-                                type="radio"
-                                name={key}
-                                value={option}
-                                checked={physicalExam[key] === option}
-                                onChange={(e) => setPhysicalExam({ ...physicalExam, [key]: e.target.value })}
-                                className="form-radio h-4 w-4 text-blue-600 dark:text-blue-300"
-                              />
-                              <span className="ml-2 text-gray-700 dark:text-gray-200">{option}</span>
-                            </label>
-                          ))}
+                  {/* Physical Exam */}
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2"><Heart className="w-4 h-4 text-pink-400" />Physical Exam Summary</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {[
+                        { key: 'general', label: 'General', options: ['Active', 'Dull'] },
+                        { key: 'chest_lungs', label: 'Chest/Lungs', options: ['Clear', 'Congested'] },
+                        { key: 'abdomen', label: 'Abdomen', options: ['Soft', 'Tender'] },
+                        { key: 'skin', label: 'Skin', options: ['Normal', 'Rashes'] },
+                        { key: 'ent', label: 'ENT', options: ['Normal', 'Infection'] }
+                      ].map(({ key, label, options }) => (
+                        <div key={key} className="space-y-2">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2"><Check className="w-4 h-4 text-blue-400" />{label}</label>
+                          <div className="flex space-x-4">
+                            {options.map((option) => (
+                              <label key={option} className="inline-flex items-center">
+                                <input
+                                  type="radio"
+                                  name={key}
+                                  value={option}
+                                  checked={physicalExam[key] === option}
+                                  onChange={(e) => setPhysicalExam({ ...physicalExam, [key]: e.target.value })}
+                                  className="form-radio h-4 w-4 text-blue-600 dark:text-blue-300"
+                                />
+                                <span className="ml-2 text-gray-700 dark:text-gray-200">{option}</span>
+                              </label>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Diagnosis */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-yellow-400" />Diagnosis <span className="text-gray-500 dark:text-gray-300">(e.g., Upper respiratory tract infection, Gastroenteritis)</span></label>
-                  <input
-                    type="text"
-                    value={diagnosis}
-                    onChange={(e) => setDiagnosis(e.target.value)}
-                    className="w-full rounded-lg border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200"
-                    placeholder="Enter diagnosis"
-                  />
-                </div>
-
-                {/* Treatment Plan */}
-                <div>
-                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2"><Plus className="w-4 h-4 text-emerald-400" />Treatment Plan</h4>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Medications</label>
-                      <textarea
-                        value={treatmentPlan.medications}
-                        onChange={(e) => setTreatmentPlan({ ...treatmentPlan, medications: e.target.value })}
-                        className="w-full rounded-lg border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
-                        rows="2"
-                        placeholder="e.g., Paracetamol drops, Syrup XYZ"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Advice/Counseling</label>
-                      <textarea
-                        value={treatmentPlan.advice}
-                        onChange={(e) => setTreatmentPlan({ ...treatmentPlan, advice: e.target.value })}
-                        className="w-full rounded-lg border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
-                        rows="2"
-                        placeholder="e.g., Hydration, Light meals, Hygiene tips"
-                      />
+                      ))}
                     </div>
                   </div>
-                </div>
 
-                {/* Follow-up Section in Add Visit Note */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2"><Calendar className="w-4 h-4 text-blue-400" />Is follow-up required?</label>
-                  <div className="flex items-center gap-6 mb-2">
-                    <label className="inline-flex items-center">
-                      <input
-                        type="radio"
-                        name="followup_required"
-                        value="no"
-                        checked={!followUpRequired}
-                        onChange={() => setFollowUpRequired(false)}
-                        className="form-radio h-4 w-4 text-blue-600 dark:text-blue-300"
-                      />
-                      <span className="ml-2 text-gray-700 dark:text-gray-200">No</span>
-                    </label>
-                    <label className="inline-flex items-center">
-                      <input
-                        type="radio"
-                        name="followup_required"
-                        value="yes"
-                        checked={followUpRequired}
-                        onChange={() => {
-                          setFollowUpRequired(true);
-                          setShowAppointmentScheduler(true);
-                        }}
-                        className="form-radio h-4 w-4 text-blue-600 dark:text-blue-300"
-                      />
-                      <span className="ml-2 text-gray-700 dark:text-gray-200">Yes</span>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Vitals Section */}
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {/* Diagnosis */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1 flex items-center gap-1"><Heart className="w-4 h-4 text-pink-400" />Height (cm)</label>
-                    <input
-                      type="number"
-                      value={vitals.height}
-                      onChange={(e) => handleVitalChange('height', e.target.value)}
-                      className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-200 ${vitalWarnings.height ? 'border-red-500' : ''}`}
-                      placeholder="Height"
-                      step="0.1"
-                    />
-                    {vitalWarnings.height && (
-                      <p className="text-red-500 text-xs mt-1">{vitalWarnings.height}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1 flex items-center gap-1"><Heart className="w-4 h-4 text-pink-400" />Weight (kg)</label>
-                    <input
-                      type="number"
-                      value={vitals.weight}
-                      onChange={(e) => handleVitalChange('weight', e.target.value)}
-                      className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-200 ${vitalWarnings.weight ? 'border-red-500' : ''}`}
-                      placeholder="Weight"
-                      step="0.1"
-                    />
-                    {vitalWarnings.weight && (
-                      <p className="text-red-500 text-xs mt-1">{vitalWarnings.weight}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1 flex items-center gap-1"><AlertTriangle className="w-4 h-4 text-yellow-400" />Temperature (°F)</label>
-                    <input
-                      type="number"
-                      value={vitals.temperature}
-                      onChange={(e) => handleVitalChange('temperature', e.target.value)}
-                      className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 ${vitalWarnings.temperature ? 'border-red-500' : ''}`}
-                      placeholder="Temperature"
-                      step="0.1"
-                    />
-                    {vitalWarnings.temperature && (
-                      <p className="text-red-500 text-xs mt-1">{vitalWarnings.temperature}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1 flex items-center gap-1"><Heart className="w-4 h-4 text-pink-400" />Heart Rate (bpm)</label>
-                    <input
-                      type="number"
-                      value={vitals.heartRate}
-                      onChange={(e) => handleVitalChange('heartRate', e.target.value)}
-                      className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-200 ${vitalWarnings.heartRate ? 'border-red-500' : ''}`}
-                      placeholder="Heart Rate"
-                    />
-                    {vitalWarnings.heartRate && (
-                      <p className="text-red-500 text-xs mt-1">{vitalWarnings.heartRate}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1 flex items-center gap-1"><Heart className="w-4 h-4 text-pink-400" />Blood Pressure</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-yellow-400" />Diagnosis <span className="text-gray-500 dark:text-gray-300">(e.g., Upper respiratory tract infection, Gastroenteritis)</span></label>
                     <input
                       type="text"
-                      value={vitals.bloodPressure}
-                      onChange={(e) => handleVitalChange('bloodPressure', e.target.value)}
-                      className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-200 ${vitalWarnings.bloodPressure ? 'border-red-500' : ''}`}
-                      placeholder="e.g., 120/80"
+                      value={diagnosis}
+                      onChange={(e) => setDiagnosis(e.target.value)}
+                      className="w-full rounded-lg border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200"
+                      placeholder="Enter diagnosis"
                     />
-                    {vitalWarnings.bloodPressure && (
-                      <p className="text-red-500 text-xs mt-1">{vitalWarnings.bloodPressure}</p>
-                    )}
                   </div>
+
+                  {/* Treatment Plan */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1 flex items-center gap-1"><Heart className="w-4 h-4 text-pink-400" />Head Circumference (cm)</label>
-                    <input
-                      type="number"
-                      value={vitals.headCircumference}
-                      onChange={(e) => handleVitalChange('headCircumference', e.target.value)}
-                      className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-200 ${vitalWarnings.headCircumference ? 'border-red-500' : ''}`}
-                      placeholder="Head Circumference"
-                      step="0.1"
-                    />
-                    {vitalWarnings.headCircumference && (
-                      <p className="text-red-500 text-xs mt-1">{vitalWarnings.headCircumference}</p>
-                    )}
+                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2"><Plus className="w-4 h-4 text-emerald-400" />Treatment Plan</h4>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Medications</label>
+                        <textarea
+                          value={treatmentPlan.medications}
+                          onChange={(e) => setTreatmentPlan({ ...treatmentPlan, medications: e.target.value })}
+                          className="w-full rounded-lg border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+                          rows="2"
+                          placeholder="e.g., Paracetamol drops, Syrup XYZ"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Advice/Counseling</label>
+                        <textarea
+                          value={treatmentPlan.advice}
+                          onChange={(e) => setTreatmentPlan({ ...treatmentPlan, advice: e.target.value })}
+                          className="w-full rounded-lg border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+                          rows="2"
+                          placeholder="e.g., Hydration, Light meals, Hygiene tips"
+                        />
+                      </div>
+                    </div>
                   </div>
-                </div>
 
-                {error && (
-                  <div className="text-red-500 text-sm mt-2">
-                    {error}
+                  {/* Follow-up Section in Add Visit Note */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2"><Calendar className="w-4 h-4 text-blue-400" />Is follow-up required?</label>
+                    <div className="flex items-center gap-6 mb-2">
+                      <label className="inline-flex items-center">
+                        <input
+                          type="radio"
+                          name="followup_required"
+                          value="no"
+                          checked={!followUpRequired}
+                          onChange={() => setFollowUpRequired(false)}
+                          className="form-radio h-4 w-4 text-blue-600 dark:text-blue-300"
+                        />
+                        <span className="ml-2 text-gray-700 dark:text-gray-200">No</span>
+                      </label>
+                      <label className="inline-flex items-center">
+                        <input
+                          type="radio"
+                          name="followup_required"
+                          value="yes"
+                          checked={followUpRequired}
+                          onChange={() => {
+                            setFollowUpRequired(true);
+                            setShowAppointmentScheduler(true);
+                          }}
+                          className="form-radio h-4 w-4 text-blue-600 dark:text-blue-300"
+                        />
+                        <span className="ml-2 text-gray-700 dark:text-gray-200">Yes</span>
+                      </label>
+                    </div>
                   </div>
-                )}
 
-                {/* Floating Action Button for Add Note (mobile) */}
-                <div className="flex justify-end">
-                  <button
-                    type="submit"
-                    className="w-full md:w-auto bg-gradient-to-r from-blue-500 to-emerald-500 text-white py-2 px-8 rounded-full font-bold shadow-lg hover:from-blue-600 hover:to-emerald-600 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                  >
-                    Add Note
-                  </button>
-                </div>
-              </form>
+                  {/* Vitals Section */}
+                  <div className="mb-8">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-lg font-bold text-pink-700 flex items-center gap-2">
+                        <Heart className="w-5 h-5 text-pink-400" />Vitals
+                      </label>
+                      <button
+                        className="flex items-center gap-1 text-pink-700 hover:text-pink-900 focus:outline-none focus:ring-2 focus:ring-pink-300 rounded px-2 py-1"
+                        onClick={() => setExpandedVitals(v => !v)}
+                        aria-expanded={expandedVitals}
+                      >
+                        {expandedVitals ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                      </button>
+                    </div>
+                    <div className={`overflow-hidden transition-all duration-500 ${expandedVitals ? 'max-h-[2000px] py-2' : 'max-h-0 py-0'}`} style={{ transitionProperty: 'max-height, padding' }}>
+                      {expandedVitals && (
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 bg-white rounded-2xl shadow-lg p-6 border border-pink-100">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1"><Heart className="w-4 h-4 text-pink-400" />Height (cm)</label>
+                            <input
+                              type="number"
+                              value={vitals.height}
+                              onChange={(e) => handleVitalChange('height', e.target.value)}
+                              className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-200 ${vitalWarnings.height ? 'border-red-500' : ''}`}
+                              placeholder="Height"
+                              step="0.1"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Range: 45-120 cm</p>
+                            {vitalWarnings.height && (
+                              <p className="text-red-500 text-xs mt-1">{vitalWarnings.height}</p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1"><Heart className="w-4 h-4 text-pink-400" />Weight (kg)</label>
+                            <input
+                              type="number"
+                              value={vitals.weight}
+                              onChange={(e) => handleVitalChange('weight', e.target.value)}
+                              className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-200 ${vitalWarnings.weight ? 'border-red-500' : ''}`}
+                              placeholder="Weight"
+                              step="0.1"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Range: 2-40 kg</p>
+                            {vitalWarnings.weight && (
+                              <p className="text-red-500 text-xs mt-1">{vitalWarnings.weight}</p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1"><AlertTriangle className="w-4 h-4 text-yellow-400" />Temperature (°F)</label>
+                            <input
+                              type="number"
+                              value={vitals.temperature}
+                              onChange={(e) => handleVitalChange('temperature', e.target.value)}
+                              className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 ${vitalWarnings.temperature ? 'border-red-500' : ''}`}
+                              placeholder="Temperature"
+                              step="0.1"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Range: 97-100.4 °F</p>
+                            {vitalWarnings.temperature && (
+                              <p className="text-red-500 text-xs mt-1">{vitalWarnings.temperature}</p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1"><Heart className="w-4 h-4 text-pink-400" />Heart Rate (bpm)</label>
+                            <input
+                              type="number"
+                              value={vitals.heartRate}
+                              onChange={(e) => handleVitalChange('heartRate', e.target.value)}
+                              className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-200 ${vitalWarnings.heartRate ? 'border-red-500' : ''}`}
+                              placeholder="Heart Rate"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Range: 80-160 bpm</p>
+                            {vitalWarnings.heartRate && (
+                              <p className="text-red-500 text-xs mt-1">{vitalWarnings.heartRate}</p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1"><Heart className="w-4 h-4 text-pink-400" />Blood Pressure</label>
+                            <input
+                              type="text"
+                              value={vitals.bloodPressure}
+                              onChange={(e) => handleVitalChange('bloodPressure', e.target.value)}
+                              className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-200 ${vitalWarnings.bloodPressure ? 'border-red-500' : ''}`}
+                              placeholder="e.g., 90/60"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Range: 80/50 - 120/80 mmHg</p>
+                            {vitalWarnings.bloodPressure && (
+                              <p className="text-red-500 text-xs mt-1">{vitalWarnings.bloodPressure}</p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1"><Heart className="w-4 h-4 text-pink-400" />Head Circumference (cm)</label>
+                            <input
+                              type="number"
+                              value={vitals.headCircumference}
+                              onChange={(e) => handleVitalChange('headCircumference', e.target.value)}
+                              className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-200 ${vitalWarnings.headCircumference ? 'border-red-500' : ''}`}
+                              placeholder="Head Circumference"
+                              step="0.1"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Range: 32-52 cm</p>
+                            {vitalWarnings.headCircumference && (
+                              <p className="text-red-500 text-xs mt-1">{vitalWarnings.headCircumference}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {error && (
+                    <div className="text-red-500 text-sm mt-2">
+                      {error}
+                    </div>
+                  )}
+
+                  {/* Floating Action Button for Add Note (mobile) */}
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      className="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50"
+                      disabled={savingNote}
+                    >
+                      {savingNote ? (
+                        <span className="flex items-center gap-2">
+                          <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg>
+                          Saving...
+                        </span>
+                      ) : (
+                        'Add Note'
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Previous Notes */}
           <div className="mb-8">
@@ -1230,7 +1294,7 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
                         <div className="flex justify-between items-center mb-2">
                           <div>
                             <p className="text-lg font-bold text-blue-700 dark:text-blue-200 flex items-center gap-2"><Calendar className="w-4 h-4 text-blue-400" />{new Date(note.visit_date).toLocaleDateString()}</p>
-                            <p className="text-sm text-gray-500 dark:text-gray-300 font-medium flex items-center gap-2"><User className="w-4 h-4 text-blue-400" />Dr. {note.doctors?.users?.full_name || 'Unknown'}</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-300 font-medium flex items-center gap-2"><User className="w-4 h-4 text-blue-400" />Dr. {note.doctor?.full_name || 'Unknown'}</p>
                           </div>
                           <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${note.visit_type === 'New' ? 'bg-blue-100 text-blue-800' : note.visit_type === 'Follow-Up' ? 'bg-emerald-100 text-emerald-800' : 'bg-yellow-100 text-yellow-800'}`}>
                             {note.visit_type}
@@ -1450,7 +1514,7 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
       {/* Appointment Scheduler Modal */}
       {showAppointmentScheduler && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6">
             <AppointmentScheduler
               patient={patient}
               defaultDate={followUpDate}

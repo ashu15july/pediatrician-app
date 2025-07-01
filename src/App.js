@@ -15,17 +15,15 @@ import { getSubdomain } from './utils/getSubdomain';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import VerifyOtpPage from './pages/VerifyOtpPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import CalendarSidebarPanel from './components/CalendarSidebarPanel';
 
 function ClinicAppContent() {
-  console.log('ClinicAppContent: Component rendering');
   const { currentUser: clinicUser, isLoggedIn: isClinicLoggedIn, loading: clinicLoading } = useClinicAuth();
-  console.log('ClinicAppContent: Clinic Auth state - clinicUser:', clinicUser, 'isClinicLoggedIn:', isClinicLoggedIn, 'clinicLoading:', clinicLoading);
   
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
     // Set to start of day in local timezone
     today.setHours(0, 0, 0, 0);
-    console.log('App.js: Initializing selectedDate to:', today);
     return today;
   });
   const [appointments, setAppointments] = useState([]);
@@ -43,15 +41,12 @@ function ClinicAppContent() {
   // Get clinic subdomain from localStorage or URL
   useEffect(() => {
     const subdomain = getSubdomain();
-    console.log('ClinicAppContent useEffect: getSubdomain() returned:', subdomain);
     setClinicSubdomain(subdomain);
-    console.log('ClinicAppContent useEffect: clinicSubdomain set to:', subdomain);
   }, []);
 
   // Load data when user is logged in and clinic subdomain is available
   useEffect(() => {
     if (isActiveLoggedIn && clinicSubdomain) {
-      console.log('ClinicAppContent useEffect: Loading data for clinic:', clinicSubdomain);
       loadPatients();
       loadDoctors();
     } else {
@@ -63,60 +58,35 @@ function ClinicAppContent() {
 
   // Load appointments after patients and doctors are loaded
   useEffect(() => {
-    console.log('App.js useEffect: Checking if should load appointments:', {
-      isActiveLoggedIn,
-      clinicSubdomain,
-      patientsLength: patients.length,
-      doctorsLength: doctors.length
-    });
-    
     if (isActiveLoggedIn && clinicSubdomain && patients.length > 0 && doctors.length > 0) {
-      console.log('App.js useEffect: Loading appointments after data is ready');
       loadAppointments();
     }
   }, [isActiveLoggedIn, clinicSubdomain, patients.length, doctors.length]);
 
-  // Debug logs
-  useEffect(() => {
-    console.log('ClinicAppContent patients:', patients);
-    console.log('ClinicAppContent doctors:', doctors);
-  }, [patients, doctors]);
-
   const loadAppointments = async () => {
-    if (!clinicSubdomain) {
-      console.log('loadAppointments: No clinic subdomain, skipping');
-      return;
-    }
-    
+    if (!clinicSubdomain) return;
     try {
-      setError(null);
-      console.log('loadAppointments: Starting to load appointments for clinic:', clinicSubdomain);
-      
-      // Determine which function to use based on user role
-      let functionName = 'get_clinic_appointments'; // Default function that handles role-based access
-      
-      // For debugging, we can also use specific functions
+      // Fetch the clinic by subdomain to get the clinic id
+      const { data: clinicData, error: clinicError } = await supabase
+        .from('clinics')
+        .select('id')
+        .eq('subdomain', clinicSubdomain)
+        .single();
+      if (clinicError || !clinicData) throw clinicError || new Error('Clinic not found');
+      // Fetch all appointments for the clinic (no date filter)
+      let query = supabase
+        .from('appointments')
+        .select(`
+          *,
+          user:users!appointments_user_id_fkey(id, full_name, role),
+          patient:patients!appointments_patient_id_fkey(id, name)
+        `)
+        .eq('clinic_id', clinicData.id);
       if (activeUser?.role === 'doctor') {
-        functionName = 'get_doctor_appointments';
-      } else if (activeUser?.role === 'admin' || activeUser?.role === 'support') {
-        functionName = 'get_all_clinic_appointments';
+        query = query.eq('user_id', activeUser.id);
       }
-      
-      // Debug: log the parameters being sent to the RPC call
-      console.log('Calling RPC with:', { functionName, clinic_subdomain: clinicSubdomain, p_user_email: activeUser?.email });
-      
-      // Use RPC function to get role-appropriate appointments
-      const { data, error } = await supabase
-        .rpc(functionName, { 
-          clinic_subdomain: clinicSubdomain,
-          p_user_email: activeUser?.email 
-        });
-      // Debug: log the response from the RPC call
-      console.log('Supabase RPC response:', { data, error });
-
+      const { data, error } = await query;
       if (error) throw error;
-      console.log('Loaded appointments for role', activeUser?.role, ':', data);
-      console.log('Setting appointments state with:', data);
       setAppointments(data || []);
     } catch (err) {
       console.error('Error loading appointments:', err);
@@ -128,18 +98,13 @@ function ClinicAppContent() {
     if (!clinicSubdomain) return;
     
     try {
-      console.log('loadPatients: Starting to load patients for clinic:', clinicSubdomain);
-      
       // Use RPC function to get clinic-specific patients
       const { data, error } = await supabase
         .rpc('get_clinic_patients', { clinic_subdomain: clinicSubdomain });
       
-      console.log('loadPatients: Supabase response - data:', data, 'error:', error);
       if (error) {
-        console.error('loadPatients: Supabase error:', error);
         throw error;
       }
-      console.log('loadPatients: Setting patients state with:', data);
       setPatients(data || []);
     } catch (err) {
       console.error('loadPatients: Error loading patients:', err);
@@ -149,20 +114,23 @@ function ClinicAppContent() {
 
   const loadDoctors = async () => {
     if (!clinicSubdomain) return;
-    
     try {
-      console.log('loadDoctors: Starting to load doctors for clinic:', clinicSubdomain);
-      
-      // Use RPC function to get clinic-specific doctors
+      // Fetch the clinic by subdomain to get the clinic id
+      const { data: clinicData, error: clinicError } = await supabase
+        .from('clinics')
+        .select('id')
+        .eq('subdomain', clinicSubdomain)
+        .single();
+      if (clinicError || !clinicData) throw clinicError || new Error('Clinic not found');
+      // Fetch doctors from users table
       const { data, error } = await supabase
-        .rpc('get_clinic_doctors', { clinic_subdomain: clinicSubdomain });
-      
-      console.log('loadDoctors: Supabase response - data:', data, 'error:', error);
+        .from('users')
+        .select('id, full_name')
+        .eq('role', 'doctor')
+        .eq('clinic_id', clinicData.id);
       if (error) {
-        console.error('loadDoctors: Supabase error:', error);
         throw error;
       }
-      console.log('loadDoctors: Setting doctors state with:', data);
       setDoctors(data || []);
     } catch (err) {
       console.error('loadDoctors: Error loading doctors:', err);
@@ -174,7 +142,18 @@ function ClinicAppContent() {
     return patients.find(patient => patient.id === patientId);
   };
 
-  const handleAppointmentScheduled = async () => {
+  const handleAppointmentScheduled = async (newAppointment) => {
+    if (newAppointment && newAppointment.date) {
+      // Set selectedDate to the date of the new appointment
+      const dateObj = new Date(newAppointment.date);
+      // Only update if the date is different
+      setSelectedDate(prev => {
+        if (!prev || prev.toDateString() !== dateObj.toDateString()) {
+          return dateObj;
+        }
+        return prev;
+      });
+    }
     await loadAppointments(); // Refresh appointments after scheduling
     await loadPatients(); // Also refresh patients in case of any updates
   };
@@ -196,16 +175,7 @@ function ClinicAppContent() {
 
   // Add a separate effect for date changes
   useEffect(() => {
-    console.log('App.js date change useEffect: Checking if should reload appointments:', {
-      isActiveLoggedIn,
-      clinicSubdomain,
-      patientsLength: patients.length,
-      doctorsLength: doctors.length,
-      selectedDate
-    });
-    
     if (isActiveLoggedIn && clinicSubdomain && patients.length > 0 && doctors.length > 0) {
-      console.log('App.js date change useEffect: Reloading appointments for date:', selectedDate);
       loadAppointments();
     }
   }, [selectedDate, isActiveLoggedIn, clinicSubdomain, patients.length, doctors.length]);
@@ -246,16 +216,21 @@ function ClinicAppContent() {
                   onPatientAdded={loadPatients}
                 />
               </div>
-
-              {/* Patients Section */}
+              {/* Sidebar: Appointment/Doctor Details */}
               <div className="lg:col-span-1">
-                <Patients />
+                <CalendarSidebarPanel
+                  selectedDate={selectedDate}
+                  doctors={doctors}
+                  appointments={appointments}
+                  patients={patients}
+                  currentUser={activeUser}
+                />
               </div>
             </div>
           )}
           {currentView === 'patients' && (
             <div className="container mx-auto px-4 py-8">
-              <Patients />
+              <Patients onPatientAdded={loadPatients} />
             </div>
           )}
         </div>
@@ -268,9 +243,6 @@ function App() {
   const subdomain = getSubdomain();
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   
-  console.log('App: Current subdomain:', subdomain);
-  console.log('App: Is localhost:', isLocalhost);
-
   return (
     <Router>
       <ClinicAuthProvider>

@@ -41,33 +41,20 @@ const AppointmentScheduler = ({ patient, onClose, onAppointmentScheduled, defaul
   }, [defaultDate]);
 
   const loadDoctors = async () => {
-    if (!clinic?.subdomain) {
-      console.log('No clinic subdomain available:', clinic);
+    if (!clinic?.id) {
       return;
     }
-    
-    console.log('AppointmentScheduler - Loading doctors for clinic:', clinic.subdomain);
-    console.log('AppointmentScheduler - Clinic object:', clinic);
-    
     try {
       const { data, error } = await supabase
-        .rpc('get_clinic_doctors', { clinic_subdomain: clinic.subdomain });
-
-      console.log('AppointmentScheduler - RPC response:', { data, error });
-      console.log('AppointmentScheduler - RPC function called with subdomain:', clinic.subdomain);
-
+        .from('users')
+        .select('id, full_name')
+        .eq('role', 'doctor')
+        .eq('clinic_id', clinic.id);
       if (error) {
-        console.error('AppointmentScheduler - RPC error:', error);
         throw error;
       }
-      
-      console.log('AppointmentScheduler - Doctors data received:', data);
-      console.log('AppointmentScheduler - Number of doctors:', data?.length || 0);
-      
       setDoctors(data || []);
-      console.log('AppointmentScheduler - Doctors state updated:', data);
     } catch (err) {
-      console.error('AppointmentScheduler - Error loading doctors:', err);
       setError('Failed to load doctors. Please try again.');
     }
   };
@@ -76,46 +63,29 @@ const AppointmentScheduler = ({ patient, onClose, onAppointmentScheduled, defaul
     e.preventDefault();
     setLoading(true);
     setError(null);
-
     try {
       // Ensure the date is properly formatted to avoid timezone issues
-      // The date should be stored as YYYY-MM-DD without time component
-      const formattedDate = selectedDate; // selectedDate is already in YYYY-MM-DD format from the date input
-      
-      console.log('AppointmentScheduler: Submitting appointment with date:', formattedDate);
-      console.log('AppointmentScheduler: Date type:', typeof formattedDate);
-      console.log('AppointmentScheduler: Current timezone offset:', new Date().getTimezoneOffset());
-      
-      // Use RPC function to create appointment with proper enum handling
+      const formattedDate = selectedDate;
+      // Insert appointment directly into appointments table
       const { data, error } = await supabase
-        .rpc('add_clinic_appointment', {
-          clinic_subdomain: clinic.subdomain,
-          appointment_patient_id: patient.id,
-          appointment_doctor_id: selectedDoctor,
-          appointment_date: formattedDate,
-          appointment_time: selectedTime,
-          appointment_status: 'scheduled',
-          appointment_type: appointmentType,
-          appointment_reason: reason,
-          user_email: activeUser?.email
-        });
-
-      if (error) throw error;
-
-      // Create notification for the doctor
-      await supabase
-        .from('notifications')
+        .from('appointments')
         .insert([{
-          user_id: doctors.find(d => d.id === selectedDoctor)?.user_id,
-          type: 'appointment',
-          message: `New appointment scheduled for ${patient.name} on ${formattedDate} at ${selectedTime}`,
-          is_read: false
-        }]);
-
+          user_id: selectedDoctor,
+          patient_id: patient.id,
+          clinic_id: clinic.id,
+          date: formattedDate,
+          time: selectedTime,
+          status: 'scheduled',
+          type: appointmentType,
+          reason: reason,
+          created_by: activeUser?.id
+        }])
+        .select()
+        .single();
+      if (error) throw error;
       onAppointmentScheduled(data);
       onClose();
     } catch (err) {
-      console.error('Error scheduling appointment:', err);
       setError('Failed to schedule appointment. Please try again.');
     } finally {
       setLoading(false);
@@ -162,10 +132,9 @@ const AppointmentScheduler = ({ patient, onClose, onAppointmentScheduled, defaul
           >
             <option value="">Select a doctor</option>
             {doctors.map((doctor) => {
-              console.log('Rendering doctor:', doctor);
               return (
                 <option key={doctor.id} value={doctor.id}>
-                  {doctor.user_full_name?.startsWith('Dr') ? doctor.user_full_name : `Dr. ${doctor.user_full_name}`} - {doctor.specialization}
+                  {doctor.full_name?.startsWith('Dr') ? doctor.full_name : `Dr. ${doctor.full_name}`}
                 </option>
               );
             })}

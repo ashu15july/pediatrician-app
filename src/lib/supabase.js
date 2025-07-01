@@ -29,19 +29,11 @@ Database Schema:
    - phone
    - created_at
    - last_login
+   - clinic_id (foreign key -> clinics.id)
+   - ...
+   // NOTE: Doctors are now users with role = 'doctor'.
 
-2. doctors
-   - id (primary key)
-   - user_id (foreign key -> users.id)
-   - specialization
-   - experience_years
-   - education
-   - availability
-   - consultation_fee
-   - rating
-   - total_patients
-
-3. patients
+2. patients
    - id (primary key)
    - name
    - age
@@ -57,10 +49,10 @@ Database Schema:
    - created_at
    - last_visit
 
-4. appointments
+3. appointments
    - id (primary key)
    - patient_id (foreign key -> patients.id)
-   - doctor_id (foreign key -> doctors.id)
+   - doctor_id (foreign key -> users.id, role = 'doctor')
    - date
    - time
    - status (enum: 'scheduled', 'completed', 'cancelled')
@@ -69,17 +61,17 @@ Database Schema:
    - created_by (foreign key -> users.id)
    - created_at
 
-5. visit_notes
+4. visit_notes
    - id (primary key)
    - patient_id (foreign key -> patients.id)
-   - doctor_id (foreign key -> doctors.id)
+   - doctor_id (foreign key -> users.id, role = 'doctor')
    - visit_date
    - note
    - diagnosis
    - follow_up_date
    - created_at
 
-6. visit_notes_vitals
+5. visit_notes_vitals
    - id (primary key)
    - visit_note_id (foreign key -> visit_notes.id)
    - height
@@ -90,7 +82,7 @@ Database Schema:
    - head_circumference
    - created_at
 
-7. growth_records
+6. growth_records
    - id (primary key)
    - patient_id (foreign key -> patients.id)
    - date
@@ -102,7 +94,7 @@ Database Schema:
    - percentile_head
    - created_at
 
-8. test_reports
+7. test_reports
    - id (primary key)
    - patient_id (foreign key -> patients.id)
    - test_name
@@ -112,10 +104,10 @@ Database Schema:
    - uploaded_by (foreign key -> users.id)
    - created_at
 
-9. prescriptions
+8. prescriptions
    - id (primary key)
    - patient_id (foreign key -> patients.id)
-   - doctor_id (foreign key -> doctors.id)
+   - doctor_id (foreign key -> users.id, role = 'doctor')
    - visit_note_id (foreign key -> visit_notes.id)
    - medication_name
    - dosage
@@ -124,17 +116,17 @@ Database Schema:
    - notes
    - created_at
 
-10. vaccinations
+9. vaccinations
     - id (primary key)
     - patient_id (foreign key -> patients.id)
     - vaccine_name
     - scheduled_date
     - administered_date
     - status (enum: 'scheduled', 'administered', 'missed')
-    - administered_by (foreign key -> doctors.id)
+    - administered_by (foreign key -> users.id, role = 'doctor')
     - created_at
 
-11. notifications
+10. notifications
     - id (primary key)
     - user_id (foreign key -> users.id)
     - type (enum: 'appointment', 'followup', 'vaccination', 'test_result')
@@ -142,7 +134,7 @@ Database Schema:
     - is_read
     - created_at
 
-12. clinic_settings
+11. clinic_settings
     - id (primary key)
     - clinic_name
     - address

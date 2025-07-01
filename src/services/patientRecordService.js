@@ -3,7 +3,6 @@ import { getVisitNotes } from './patientService';
 
 // Helper function to handle Supabase errors
 const handleSupabaseError = (error, operation) => {
-  console.error(`Error during ${operation}:`, error);
   throw new Error(`Failed to ${operation}: ${error.message}`);
 };
 
@@ -110,11 +109,10 @@ export const getVaccinationRecords = async (patientId) => {
       .from('vaccinations')
       .select(`
         *,
-        administered_by:doctors(user_id, specialization)
+        administered_by:users!vaccinations_administered_by_fkey(id, full_name, role)
       `)
       .eq('patient_id', patientId)
       .order('scheduled_date', { ascending: true });
-
     if (error) throw error;
     return data;
   } catch (error) {

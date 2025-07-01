@@ -11,7 +11,7 @@ export const getPatients = async (clinicId) => {
   try {
     const { data, error } = await supabase
       .from('patients')
-      .select('*')
+      .select('id, name, age, dob, gender, guardian_name, guardian_phone, guardian_email, address, blood_group, allergies, medical_history, created_at, last_visit, guardian_relationship, delivery_type, birth_term, gestational_age_weeks, clinic_id, telegram_chat_id')
       .eq('clinic_id', clinicId)
       .order('created_at', { ascending: false });
     
@@ -26,7 +26,7 @@ export const getPatientById = async (id, clinicId) => {
   try {
     const { data, error } = await supabase
       .from('patients')
-      .select('*')
+      .select('id, name, age, dob, gender, guardian_name, guardian_phone, guardian_email, address, blood_group, allergies, medical_history, created_at, last_visit, guardian_relationship, delivery_type, birth_term, gestational_age_weeks, clinic_id, telegram_chat_id')
       .eq('id', id)
       .eq('clinic_id', clinicId)
       .single();
@@ -91,20 +91,12 @@ export const getVisitNotes = async (patientId, clinicId) => {
       .from('visit_notes')
       .select(`
         *,
-        development_milestones,
-        doctors (
-          id,
-          users (
-            id,
-            full_name
-          )
-        ),
+        doctor:users!visit_notes_user_id_fkey(id, full_name),
         visit_notes_vitals (*)
       `)
       .eq('patient_id', patientId)
       .eq('clinic_id', clinicId)
       .order('visit_date', { ascending: false });
-
     if (error) throw error;
     return data;
   } catch (error) {
@@ -112,70 +104,30 @@ export const getVisitNotes = async (patientId, clinicId) => {
   }
 };
 
-// Add this new function to get doctor ID from user ID
-const getDoctorIdFromUserId = async (userId) => {
-  try {
-    console.log('Looking up doctor ID for user ID:', userId);
-    
-    // First, let's check if the user exists
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', userId)
-      .single();
-
-    if (userError) {
-      console.error('Error checking user:', userError);
-      throw new Error('User not found');
-    }
-
-    console.log('Found user:', userData);
-
-    // Then look up the doctor
-    const { data: doctorData, error: doctorError } = await supabase
-      .from('doctors')
-      .select('*')
-      .eq('user_id', userId);
-
-    if (doctorError) {
-      console.error('Error checking doctor:', doctorError);
-      throw doctorError;
-    }
-
-    console.log('Found doctor data:', doctorData);
-
-    if (!doctorData || doctorData.length === 0) {
-      console.error('No doctor found for user ID:', userId);
-      throw new Error('No doctor record found for this user');
-    }
-
-    if (doctorData.length > 1) {
-      console.error('Multiple doctors found for user ID:', userId);
-      throw new Error('Multiple doctor records found for this user');
-    }
-
-    console.log('Found doctor ID:', doctorData[0].id);
-    return doctorData[0].id;
-  } catch (error) {
-    console.error('Error getting doctor ID:', error);
-    throw new Error('Failed to get doctor ID: ' + error.message);
-  }
+// Get doctor user (validate user is a doctor in this clinic)
+const getDoctorUser = async (userId, clinicId) => {
+  const { data: user, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', userId)
+    .eq('role', 'doctor')
+    .eq('clinic_id', clinicId)
+    .single();
+  if (error || !user) throw new Error('Doctor user not found');
+  return user;
 };
 
 export const addVisitNote = async (noteData) => {
   try {
-    console.log('Adding visit note with data:', noteData);
-
-    // Get the doctor ID from the user ID
-    const doctorId = await getDoctorIdFromUserId(noteData.doctor_id);
-    console.log('Retrieved doctor ID:', doctorId);
-
-    // First, create the visit note
+    // Validate doctor user
+    await getDoctorUser(noteData.user_id, noteData.clinic_id);
+    // Insert visit note
     const { data: visitNote, error: visitNoteError } = await supabase
       .from('visit_notes')
       .insert([{
         patient_id: noteData.patient_id,
-        doctor_id: doctorId,
+        user_id: noteData.user_id,
+        clinic_id: noteData.clinic_id,
         visit_date: noteData.visit_date,
         visit_type: noteData.visit_type,
         chief_complaint: noteData.chief_complaint,
@@ -190,15 +142,8 @@ export const addVisitNote = async (noteData) => {
       }])
       .select()
       .single();
-
-    if (visitNoteError) {
-      console.error('Error creating visit note:', visitNoteError);
-      throw visitNoteError;
-    }
-
-    console.log('Visit note created:', visitNote);
-
-    // Then, create the vitals record
+    if (visitNoteError) throw visitNoteError;
+    // Insert vitals if present
     if (noteData.vitals) {
       const { error: vitalsError } = await supabase
         .from('visit_notes_vitals')
@@ -211,13 +156,8 @@ export const addVisitNote = async (noteData) => {
           blood_pressure: noteData.vitals.blood_pressure,
           head_circumference: noteData.vitals.head_circumference
         }]);
-
-      if (vitalsError) {
-        console.error('Error creating vitals:', vitalsError);
-        throw vitalsError;
-      }
+      if (vitalsError) throw vitalsError;
     }
-
     return visitNote;
   } catch (error) {
     handleSupabaseError(error, 'create visit note');
@@ -322,7 +262,6 @@ export const getVaccinations = async (patientId) => {
     .eq('patient_id', patientId)
     .order('due_date', { ascending: true });
   if (error) {
-    console.error('Error fetching vaccinations:', error.message || error);
     throw error;
   }
   return data;
@@ -336,7 +275,6 @@ export const upsertVaccination = async (vaccination) => {
     .select()
     .single();
   if (error) {
-    console.error('Error upserting vaccination:', error.message || error);
     throw error;
   }
   return data;

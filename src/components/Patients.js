@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Eye, Edit, Trash2 } from 'lucide-react';
+import { Plus, Search, Eye, Edit, Trash2, ChevronDown, ChevronUp, User, Calendar, Clock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useClinicAuth } from '../contexts/ClinicAuthContext';
 import { useClinic } from '../contexts/ClinicContext';
@@ -7,8 +7,9 @@ import { getPatients, deletePatient } from '../services/patientService';
 import NewPatientForm from './NewPatientForm';
 import PatientDetails from './PatientDetails';
 import AppointmentScheduler from './AppointmentScheduler';
+import { supabase } from '../lib/supabase';
 
-const Patients = () => {
+const Patients = ({ onPatientAdded }) => {
   const { hasPermission: authHasPermission } = useAuth();
   const { hasPermission: clinicHasPermission, currentUser: clinicUser } = useClinicAuth();
   const { clinic, loading: clinicLoading, error: clinicError } = useClinic();
@@ -52,6 +53,9 @@ const Patients = () => {
   const handlePatientAdded = (patient) => {
     setShowNewPatientForm(false);
     setPatients(prev => [...prev, patient]);
+    if (onPatientAdded) {
+      onPatientAdded(patient);
+    }
   };
 
   const handleAppointmentScheduled = () => {
@@ -244,7 +248,7 @@ const Patients = () => {
       {/* Appointment Scheduler Modal */}
       {showAppointmentScheduler && newPatient && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-gradient-to-br from-blue-100 via-blue-50 to-green-100 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-0">
+          <div className="bg-gradient-to-br from-blue-100 via-blue-50 to-green-100 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
             <div className="px-8 py-6">
               <AppointmentScheduler
                 patient={newPatient}

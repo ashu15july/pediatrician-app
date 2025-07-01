@@ -110,7 +110,7 @@ const MainLayout = ({ children, currentView, setCurrentView, currentUser }) => {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto p-4">
+      <main className="p-0">
         {children}
       </main>
     </div>

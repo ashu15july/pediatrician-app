@@ -25,6 +25,11 @@ const DateAppointmentScheduler = ({
   const hasPermission = clinicUser ? clinicHasPermission : authHasPermission;
   const activeUser = clinicUser || currentUser; // Use clinic user if available, otherwise use regular user
 
+  // Determine if user is support
+  const isSupportUser = activeUser && activeUser.role === 'support';
+  // Determine if editing a scheduled appointment
+  const isEditingScheduled = isSupportUser && existingAppointment && existingAppointment.status === 'scheduled';
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
@@ -44,15 +49,6 @@ const DateAppointmentScheduler = ({
   const patients = propPatients || [];
   const doctors = propDoctors || [];
 
-  // Debug logging
-  useEffect(() => {
-    console.log('DateAppointmentScheduler - Received doctors:', doctors);
-    console.log('DateAppointmentScheduler - Number of doctors:', doctors.length);
-    if (doctors.length > 0) {
-      console.log('DateAppointmentScheduler - First doctor structure:', doctors[0]);
-    }
-  }, [doctors]);
-
   // Time slots from 9 AM to 5 PM in 30-minute intervals
   const timeSlots = Array.from({ length: 17 }, (_, i) => {
     const hour = Math.floor(i / 2) + 9;
@@ -68,13 +64,12 @@ const DateAppointmentScheduler = ({
       setAppointmentType(existingAppointment.type);
       setTimeSlot(existingAppointment.time);
       setNotes(existingAppointment.notes || '');
-    }
-
-    // If user is a doctor, pre-select themselves
-    if (activeUser && activeUser.role === 'doctor') {
+    } else if (activeUser && activeUser.role === 'doctor' && !selectedDoctor) {
+      // If user is a doctor and not editing, pre-select themselves
       const doctorRecord = (doctors || []).find(d => d.user_id === activeUser.id);
       if (doctorRecord) {
         setSelectedDoctor(doctorRecord.id);
+        setDoctorSearchTerm(doctorRecord.full_name);
       }
     }
   }, [existingAppointment, propPatients, propDoctors, activeUser, doctors]);
@@ -97,7 +92,7 @@ const DateAppointmentScheduler = ({
         .select('*')
         .eq('date', selectedDate.toLocaleDateString('en-CA'))
         .eq('time', timeSlot)
-        .eq('doctor_id', selectedDoctor);
+        .eq('user_id', selectedDoctor);
 
       if (checkError) throw checkError;
 
@@ -119,7 +114,7 @@ const DateAppointmentScheduler = ({
 
       const appointmentData = {
         patient_id: selectedPatient.id,
-        doctor_id: selectedDoctor,
+        user_id: selectedDoctor,
         date: appointmentDateString,
         time: timeSlot,
         type: appointmentType,
@@ -137,30 +132,15 @@ const DateAppointmentScheduler = ({
           .eq('id', existingAppointment.id)
           .select()
           .single();
-
         if (updateError) throw updateError;
         result = data;
       } else {
-        // Create new appointment using RPC function
-        const clinicSubdomain = localStorage.getItem('currentClinicSubdomain') || getSubdomain();
-        
-        if (!clinicSubdomain) {
-          throw new Error('Clinic subdomain not found');
-        }
-
+        // Create new appointment directly
         const { data, error: insertError } = await supabase
-          .rpc('add_clinic_appointment', {
-            clinic_subdomain: clinicSubdomain,
-            appointment_patient_id: appointmentData.patient_id,
-            appointment_doctor_id: appointmentData.doctor_id,
-            appointment_date: appointmentData.date, // This is now always 'YYYY-MM-DD'
-            appointment_time: appointmentData.time,
-            appointment_status: appointmentData.status,
-            appointment_type: appointmentData.type,
-            appointment_reason: appointmentData.notes || '',
-            user_email: activeUser?.email
-          });
-
+          .from('appointments')
+          .insert([appointmentData])
+          .select()
+          .single();
         if (insertError) throw insertError;
         result = data;
       }
@@ -241,7 +221,7 @@ const DateAppointmentScheduler = ({
         if (highlightedDoctorIndex >= 0 && highlightedDoctorIndex < filteredDoctorsList.length) {
           const selectedDoctor = filteredDoctorsList[highlightedDoctorIndex];
           setSelectedDoctor(selectedDoctor.id);
-          setDoctorSearchTerm(selectedDoctor.user_full_name || '');
+          setDoctorSearchTerm(selectedDoctor.full_name || '');
           setIsDoctorDropdownOpen(false);
           setHighlightedDoctorIndex(-1);
         }
@@ -264,9 +244,8 @@ const DateAppointmentScheduler = ({
   // Doctor dropdown filtering
   const filteredDoctors = doctors.filter(doctor => {
     const searchLower = doctorSearchTerm.toLowerCase();
-    const doctorName = doctor.user_full_name?.toLowerCase() || '';
-    const specialization = doctor.specialization?.toLowerCase() || '';
-    return doctorName.includes(searchLower) || specialization.includes(searchLower);
+    const doctorName = doctor.full_name?.toLowerCase() || '';
+    return doctorName.includes(searchLower);
   });
 
   if (patients.length === 0 || doctors.length === 0) {
@@ -368,40 +347,23 @@ const DateAppointmentScheduler = ({
           Doctor
         </label>
         <div className="relative">
-          <input
-            type="text"
-            value={doctorSearchTerm}
-            onChange={e => { setDoctorSearchTerm(e.target.value); setIsDoctorDropdownOpen(true); }}
-            onFocus={() => setIsDoctorDropdownOpen(true)}
-            onBlur={() => setTimeout(() => setIsDoctorDropdownOpen(false), 200)}
-            onKeyDown={handleDoctorKeyDown}
-            placeholder="Search doctor by name or specialization..."
+          <select
+            value={selectedDoctor}
+            onChange={e => {
+              setSelectedDoctor(e.target.value);
+              const selected = doctors.find(d => d.id === e.target.value);
+              setDoctorSearchTerm(selected ? selected.full_name : '');
+            }}
             className="w-full px-4 py-2 rounded-full border border-blue-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all duration-150 bg-white"
-            disabled={activeUser && activeUser.role === 'doctor'}
-          />
-          {isDoctorDropdownOpen && (
-            <div className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
-              {filteredDoctors.length > 0 ? (
-                filteredDoctors.map((doctor, index) => (
-                  <button
-                    key={doctor.id}
-                    type="button"
-                    onMouseDown={() => {
-                      setSelectedDoctor(doctor.id);
-                      setDoctorSearchTerm(doctor.user_full_name || '');
-                      setIsDoctorDropdownOpen(false);
-                    }}
-                    className={`w-full p-2 text-left hover:bg-gray-100 flex items-center space-x-2 ${highlightedDoctorIndex === index ? 'bg-blue-100' : ''}`}
-                  >
-                    <User className="w-4 h-4 text-gray-500" />
-                    <span>{doctor.user_full_name?.startsWith('Dr') ? doctor.user_full_name : `Dr. ${doctor.user_full_name}`} - {doctor.specialization}</span>
-                  </button>
-                ))
-              ) : (
-                <div className="p-2 text-gray-500">No doctors found</div>
-              )}
-            </div>
-          )}
+            required
+          >
+            <option value="">Select a doctor</option>
+            {doctors.map((doctor) => (
+              <option key={doctor.id} value={doctor.id}>
+                {doctor.full_name?.startsWith('Dr') ? doctor.full_name : `Dr. ${doctor.full_name}`}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -442,18 +404,59 @@ const DateAppointmentScheduler = ({
       </div>
 
       {/* Notes */}
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700">
-          Notes
-        </label>
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          className="w-full px-4 py-2 rounded-2xl border border-blue-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all duration-150 bg-white"
-          rows={3}
-          placeholder="Add any additional notes..."
-        />
-      </div>
+      {(!isSupportUser || !existingAppointment || !isEditingScheduled) && (
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700">
+            Notes
+          </label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className="w-full px-4 py-2 rounded-2xl border border-blue-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all duration-150 bg-white"
+            rows={3}
+            placeholder="Add any additional notes..."
+          />
+        </div>
+      )}
+
+      {/* Vitals Section (Support users can take vitals) */}
+      {isSupportUser && isEditingScheduled && (
+        <div className="space-y-2 mt-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Record Vitals</label>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs text-gray-600">Height (cm)</label>
+              <input type="number" min="40" max="200" step="0.1" className="w-full px-3 py-2 rounded-lg border border-blue-200" />
+              <div className="text-xs text-gray-400">Range: 40-200 cm</div>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600">Weight (kg)</label>
+              <input type="number" min="2" max="200" step="0.1" className="w-full px-3 py-2 rounded-lg border border-blue-200" />
+              <div className="text-xs text-gray-400">Range: 2-200 kg</div>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600">Temperature (°C)</label>
+              <input type="number" min="35" max="42" step="0.1" className="w-full px-3 py-2 rounded-lg border border-blue-200" />
+              <div className="text-xs text-gray-400">Range: 35-42°C</div>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600">Heart Rate (bpm)</label>
+              <input type="number" min="40" max="200" step="1" className="w-full px-3 py-2 rounded-lg border border-blue-200" />
+              <div className="text-xs text-gray-400">Range: 40-200 bpm</div>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600">Blood Pressure (mmHg)</label>
+              <input type="text" pattern="\d{2,3}/\d{2,3}" className="w-full px-3 py-2 rounded-lg border border-blue-200" />
+              <div className="text-xs text-gray-400">Range: 60-180 mmHg (e.g., 120/80)</div>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600">Head Circumference (cm)</label>
+              <input type="number" min="30" max="60" step="0.1" className="w-full px-3 py-2 rounded-lg border border-blue-200" />
+              <div className="text-xs text-gray-400">Range: 30-60 cm</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Submit Button */}
       <div className="flex justify-end space-x-3 mt-6">

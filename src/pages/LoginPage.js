@@ -16,15 +16,9 @@ const LoginPage = () => {
     setLoading(true);
 
     try {
-      console.log('Login attempt with username:', username);
       const result = await login(username, password);
-      console.log('Login result:', result);
       navigate('/');
     } catch (err) {
-      console.error('Login error in LoginPage:', {
-        message: err.message,
-        name: err.name
-      });
       setError(err.message || 'Invalid username or password');
     } finally {
       setLoading(false);

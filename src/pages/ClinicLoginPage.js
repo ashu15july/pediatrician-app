@@ -25,7 +25,6 @@ export default function ClinicLoginPage() {
             .rpc('get_clinic_by_subdomain', { clinic_subdomain: subdomain });
 
           if (error) {
-            console.error('Error fetching clinic:', error);
             setClinicInfo({
               name: `${subdomain.charAt(0).toUpperCase() + subdomain.slice(1)} Clinic`,
               domain: `https://${subdomain}.myapp.com`,
@@ -54,7 +53,6 @@ export default function ClinicLoginPage() {
             });
           }
         } catch (error) {
-          console.error('Error fetching clinic info:', error);
           setClinicInfo({
             name: `${subdomain.charAt(0).toUpperCase() + subdomain.slice(1)} Clinic`,
             domain: `https://${subdomain}.myapp.com`,
