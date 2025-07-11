@@ -16,6 +16,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import VerifyOtpPage from './pages/VerifyOtpPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import CalendarSidebarPanel from './components/CalendarSidebarPanel';
+import LandingPage from './pages/LandingPage';
 
 function ClinicAppContent() {
   const { currentUser: clinicUser, isLoggedIn: isClinicLoggedIn, loading: clinicLoading } = useClinicAuth();
@@ -264,9 +265,9 @@ function App() {
               <Route path="/clinic-login" element={<ClinicLoginPage />} />
               <Route path="/clinic-dashboard" element={<ClinicAppContent />} />
               <Route path="/dashboard" element={<ClinicAppContent />} />
-              {/* Root route - Show superadmin on localhost, clinic on subdomains */}
+              {/* Root route - Show clinic login on subdomains or ?clinic= param, landing page otherwise */}
               <Route path="/" element={
-                subdomain ? <ClinicLoginPage /> : <SuperAdminLoginPage />
+                subdomain ? <ClinicLoginPage /> : <LandingPage />
               } />
               {/* Catch all */}
               <Route path="*" element={<Navigate to="/" replace />} />

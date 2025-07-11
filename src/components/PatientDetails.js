@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Plus, FileText, Calendar, User, Phone, MapPin, Heart, AlertTriangle, Check, Clock, Edit, Trash2, Activity, Syringe, ChevronUp, ChevronDown } from 'lucide-react';
+import { X, Plus, FileText, Calendar, User, Phone, MapPin, Heart, AlertTriangle, Check, Clock, Edit, Trash2, Activity, Syringe, ChevronUp, ChevronDown, Mail } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useClinicAuth } from '../contexts/ClinicAuthContext';
 import { addVisitNote, getVisitNotes } from '../services/patientService';
@@ -11,7 +11,24 @@ import growthReference from '../data/growth_reference.json';
 import milestonesData from '../data/milestones.json';
 import { useClinic } from '../contexts/ClinicContext';
 
-// Helper: Calculate age in months
+// Helper: Calculate age in years and months
+function getAgeInYearsAndMonths(dob) {
+  if (!dob) return { years: 0, months: 0 };
+  const birthDate = new Date(dob);
+  const today = new Date();
+  let years = today.getFullYear() - birthDate.getFullYear();
+  let months = today.getMonth() - birthDate.getMonth();
+  if (today.getDate() < birthDate.getDate()) {
+    months--;
+  }
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
+  return { years, months };
+}
+
+// Helper: Calculate age in months (used for growth charts, vitals, etc.)
 function getAgeInMonths(dob, date) {
   const birth = new Date(dob);
   const d = new Date(date);
@@ -92,7 +109,7 @@ function StarShape(props) {
         points="16,2 20.14,11.78 31.22,11.78 22.54,18.22 26.68,28 16,21.44 5.32,28 9.46,18.22 0.78,11.78 11.86,11.78"
         fill={fill || 'red'}
         stroke="red"
-        strokeWidth="2"
+        strokeWidth="1"
       />
     </svg>
   );
@@ -111,6 +128,17 @@ const scatterData = [
 function capitalize(str) {
   if (!str) return '';
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+}
+
+// Helper to map appointment type to user-friendly label
+function getAppointmentTypeLabel(type) {
+  switch ((type || '').toLowerCase()) {
+    case 'checkup': return 'Check-up';
+    case 'followup': return 'Follow-up';
+    case 'emergency': return 'Emergency';
+    case 'vaccination': return 'Vaccination';
+    default: return type || 'N/A';
+  }
 }
 
 const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled, onUpdate, onDelete }) => {
@@ -186,6 +214,126 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
 
   // 1. Add a collapsible state for the vitals section
   const [expandedVitals, setExpandedVitals] = useState(true);
+
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResponse, setAiResponse] = useState(null);
+  const [aiError, setAiError] = useState(null);
+
+  // Add state for AI response in the form
+  const [aiDraft, setAiDraft] = useState('');
+  const [aiDraftLoading, setAiDraftLoading] = useState(false);
+  const [aiDraftError, setAiDraftError] = useState(null);
+
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailOption, setEmailOption] = useState('notes'); // 'notes', 'vaccination', or 'both'
+  const [emailContent, setEmailContent] = useState('');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSuccess, setEmailSuccess] = useState(null);
+  const [emailError, setEmailError] = useState(null);
+
+  // Helper to check if all required fields are filled
+  const isNoteComplete = () => {
+    return chiefComplaint && developmentStatus && physicalExam && diagnosis && treatmentPlan && vitals.height && vitals.weight && vitals.temperature && vitals.heartRate && vitals.bloodPressure && vitals.headCircumference;
+  };
+
+  const handleAIAssessmentDraft = async () => {
+    setAiDraftLoading(true);
+    setAiDraftError(null);
+    try {
+      // Build clinical context from current form state
+      const now = selectedDate || new Date();
+      const ageInMonths = patient.dob ? getAgeInMonths(patient.dob, now) : null;
+      const clinical_context = {
+        age_in_months: ageInMonths,
+        gender: patient.gender || null,
+        delivery_type: patient.delivery_type || null,
+        birth_term: patient.birth_term || null,
+        gestational_age_weeks: patient.gestational_age_weeks || null,
+        visit_type: visitType || null,
+        chief_complaint: chiefComplaint || null,
+        development_status: developmentStatus || null,
+        development_delay_details: developmentStatus === 'Delay' ? developmentDelayDetails : null,
+        physical_exam: physicalExam || null,
+        diagnosis: diagnosis || null,
+        treatment_plan: treatmentPlan || null,
+        vitals: vitals || null,
+        development_milestones: milestoneStatus || null,
+        follow_up_required: !!followUpDate,
+        follow_up_notes: followUpNotes || null
+      };
+      const res = await fetch('/api/ai-doctor-feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clinical_context })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAiDraftError(data.error || 'Failed to get AI feedback.');
+        console.error('AI Assessment API error:', data);
+        return;
+      }
+      if (data.ai_notes) {
+        setAiDraft(data.ai_notes);
+      } else {
+        setAiDraft('');
+        setAiDraftError('No AI response received.');
+      }
+    } catch (err) {
+      setAiDraftError('Failed to get AI feedback.');
+      console.error('AI Assessment error:', err);
+    } finally {
+      setAiDraftLoading(false);
+    }
+  };
+
+  const handleAIAssessment = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    setAiResponse(null);
+    try {
+      // Use the latest visit note (or combine notes if needed)
+      const latestNote = notes && notes.length > 0 ? notes[0] : null;
+      if (!latestNote || !patient) {
+        setAiError('No visit note or patient data available.');
+        setAiLoading(false);
+        return;
+      }
+      // Calculate age in months
+      const now = selectedDate || new Date();
+      const ageInMonths = patient.dob ? getAgeInMonths(patient.dob, now) : null;
+      // Build HIPAA-compliant context
+      const clinical_context = {
+        age_in_months: ageInMonths,
+        gender: patient.gender || null,
+        delivery_type: patient.delivery_type || null,
+        birth_term: patient.birth_term || null,
+        gestational_age_weeks: patient.gestational_age_weeks || null,
+        visit_type: latestNote.visit_type || null,
+        chief_complaint: latestNote.chief_complaint || null,
+        development_status: latestNote.development_status || null,
+        development_delay_details: latestNote.development_delay_details || null,
+        physical_exam: latestNote.physical_exam || null,
+        diagnosis: latestNote.diagnosis || null,
+        treatment_plan: latestNote.treatment_plan || null,
+        vitals: latestNote.vitals || null,
+        development_milestones: latestNote.development_milestones || null,
+        follow_up_required: !!latestNote.follow_up_date,
+        follow_up_notes: latestNote.follow_up_notes || null
+      };
+      const res = await fetch('/api/ai-doctor-feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clinical_context })
+      });
+      const data = await res.json();
+      setAiResponse(data);
+    } catch (err) {
+      setAiError('Failed to get AI feedback.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const loadNotes = useCallback(async () => {
     if (!patient?.id || !clinic?.id) {
@@ -418,6 +566,7 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
           head_circumference: validatedVitals.headCircumference || null
         },
         development_milestones: milestoneStatus,
+        ai_response: aiDraft || null,
       };
 
       if (followUpRequired && followUpDate) {
@@ -526,6 +675,97 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
     }
   };
 
+  // Helper to generate email HTML for notes
+  const generateNotesHtml = () => {
+    if (!notes.length) return '<p>No visit notes available.</p>';
+    return notes.map(note => `
+      <div style="margin-bottom:24px;">
+        <h3 style="color:#2563eb;">Visit Note (${note.visit_type}) - ${new Date(note.visit_date).toLocaleDateString()}</h3>
+        <p><b>Doctor:</b> ${note.doctor?.full_name || 'Unknown'}</p>
+        <p><b>Chief Complaint:</b> ${note.chief_complaint || 'N/A'}</p>
+        <p><b>Diagnosis:</b> ${note.diagnosis || 'N/A'}</p>
+        <p><b>Treatment Plan:</b> ${note.treatment_plan?.medications || 'N/A'}<br/>${note.treatment_plan?.advice || ''}</p>
+        <p><b>Advice:</b> ${note.treatment_plan?.advice || 'N/A'}</p>
+        <p><b>Follow-up:</b> ${note.follow_up_date ? new Date(note.follow_up_date).toLocaleDateString() : 'N/A'}</p>
+      </div>
+    `).join('');
+  };
+  // Helper to generate email HTML for vaccination
+  const generateVaccinationHtml = () => {
+    // For simplicity, just mention that vaccination details are attached or available in the app
+    return `<div><h3 style='color:#059669;'>Vaccination Details</h3><p>Vaccination details for ${patient.name} are available in the app or can be provided as a summary here.</p></div>`;
+  };
+  // Compose email content based on option
+  useEffect(() => {
+    let subject = `Patient Details for ${patient.name}`;
+    let html = '';
+    if (emailOption === 'notes') {
+      subject = `Visit Notes for ${patient.name}`;
+      html = generateNotesHtml();
+    } else if (emailOption === 'vaccination') {
+      subject = `Vaccination Details for ${patient.name}`;
+      html = generateVaccinationHtml();
+    } else {
+      subject = `Visit Notes & Vaccination Details for ${patient.name}`;
+      html = generateNotesHtml() + generateVaccinationHtml();
+    }
+    setEmailSubject(subject);
+    setEmailContent(html);
+  }, [emailOption, notes, patient]);
+
+  // Send email handler
+  const handleSendEmail = async () => {
+    setEmailSending(true);
+    setEmailSuccess(null);
+    setEmailError(null);
+    try {
+      // Use environment variable or fallback to dynamic URL
+      const baseUrl = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:3001' : window.location.origin);
+      const res = await fetch(`${baseUrl}/api/send-patient-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patientId: patient.id,
+          email: patient.guardian_email,
+          subject: emailSubject,
+          emailOption
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setEmailSuccess('Email sent successfully!');
+        setShowEmailModal(false);
+      } else {
+        setEmailError(data.error || 'Failed to send email');
+      }
+    } catch (err) {
+      setEmailError(err.message || 'Failed to send email');
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
+  // Fetch appointment type if appointment_id is present
+  useEffect(() => {
+    const fetchAppointmentType = async () => {
+      if (patient?.appointment_id) {
+        const { data, error } = await supabase
+          .from('appointments')
+          .select('type')
+          .eq('id', patient.appointment_id)
+          .single();
+        if (!error && data && data.type) {
+          setVisitType(data.type);
+        } else {
+          setVisitType('New'); // fallback
+        }
+      } else {
+        setVisitType('New');
+      }
+    };
+    fetchAppointmentType();
+  }, [patient?.appointment_id]);
+
   if (!patient) {
     return null;
   }
@@ -548,9 +788,6 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
   const starWeight = vitals.weight ? parseFloat(vitals.weight) : null;
   const starHeight = vitals.height ? parseFloat(vitals.height) : null;
 
-  // Move these before the return statement:
-  console.log('Scatter Weight Data:', { ageMonths: starAgeMonths, patient: starWeight });
-  console.log('Scatter Height Data:', { ageMonths: starAgeMonths, patient: starHeight });
 
   // Helper to get age in months and find milestone group
   const now = selectedDate || new Date();
@@ -623,7 +860,15 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
                 <div>
                   <p className="text-xs text-gray-500 dark:text-gray-300">Age</p>
                   <span className="inline-flex items-center gap-1">
-                    <span className="font-semibold text-gray-800 dark:text-gray-100">{patient.age} years</span>
+                    {/* Age display logic */}
+                    {(() => {
+                      const { years, months } = getAgeInYearsAndMonths(patient.dob);
+                      if (years < 1) {
+                        return <span className="font-semibold text-gray-800 dark:text-gray-100">{months} month{months !== 1 ? 's' : ''}</span>;
+                      } else {
+                        return <span className="font-semibold text-gray-800 dark:text-gray-100">{years} year{years !== 1 ? 's' : ''}{months > 0 ? ` ${months} month${months !== 1 ? 's' : ''}` : ''}</span>;
+                      }
+                    })()}
                     <span className="ml-2 px-2 py-0.5 rounded-full bg-green-200 text-green-800 dark:bg-blue-900 dark:text-blue-200 text-xs font-semibold">{patient.dob ? new Date(patient.dob).toLocaleDateString() : 'N/A'}</span>
                   </span>
                 </div>
@@ -644,7 +889,27 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
               </div>
             </div>
             <div className="space-y-3">
-              {/* Delivery Type - always show */}
+              <div className="flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-blue-400" />
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-300">Address</p>
+                  <p className="font-medium text-gray-700 dark:text-gray-200">{patient.address || 'N/A'}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Heart className="h-5 w-5 text-blue-400" />
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-300">Blood Group</p>
+                  <p className="font-medium text-gray-700 dark:text-gray-200">{patient.blood_group || 'N/A'}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Mail className="h-5 w-5 text-blue-400" />
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-300">Guardian Email</p>
+                  <p className="font-medium text-gray-700 dark:text-gray-200">{patient.guardian_email || 'N/A'}</p>
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 <Heart className="h-5 w-5 text-pink-400" />
                 <div>
@@ -656,7 +921,6 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
                   </p>
                 </div>
               </div>
-              {/* Birth Term - always show */}
               <div className="flex items-center gap-2">
                 <Heart className="h-5 w-5 text-pink-400" />
                 <div>
@@ -671,13 +935,6 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
                       </span>
                     )}
                   </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <MapPin className="h-5 w-5 text-blue-400" />
-                <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-300">Address</p>
-                  <p className="font-medium text-gray-700 dark:text-gray-200">{patient.address}</p>
                 </div>
               </div>
             </div>
@@ -902,369 +1159,366 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
         <div>
           {/* Medical History */}
           <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold flex items-center gap-2"><FileText className="w-5 h-5 text-blue-400" />Medical History</h3>
-              {canEditMedicalHistory && !editingMedicalHistory && (
-                <button
-                  className="inline-flex items-center gap-1 px-4 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 font-semibold shadow hover:bg-blue-200 dark:hover:bg-blue-800 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300 border border-blue-200 dark:border-gray-700"
-                  onClick={() => setEditingMedicalHistory(true)}
-                  title="Edit Medical History"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536M9 11l6 6M3 17.25V21h3.75l11.06-11.06a2.121 2.121 0 00-3-3L3 17.25z" /></svg>
-                  Edit
-                </button>
-              )}
-              {canEditMedicalHistory && editingMedicalHistory && (
-                <div className="flex gap-2">
-                  <button
-                    className="inline-flex items-center gap-1 px-4 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:text-emerald-200 font-semibold shadow hover:bg-emerald-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-emerald-300"
-                    onClick={handleSaveMedicalHistory}
-                    title="Save Medical History"
-                  >
-                    <Check className="w-4 h-4" />Save
-                  </button>
-                  <button
-                    className="inline-flex items-center gap-1 px-4 py-1 rounded-full bg-gray-100 text-gray-700 dark:text-gray-200 font-semibold shadow hover:bg-gray-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-gray-300"
-                    onClick={() => { setEditingMedicalHistory(false); setMedicalHistoryDraft(patient.medical_history || ''); }}
-                    title="Cancel Edit"
-                  >
-                    <X className="w-4 h-4" />Cancel
-                  </button>
-                </div>
-              )}
-            </div>
-            <div className="bg-gradient-to-br from-blue-50 to-emerald-50 dark:from-gray-900 dark:to-gray-800 border-l-4 border-blue-400 rounded-2xl p-6 shadow flex flex-col gap-2">
-              {editingMedicalHistory ? (
-                <textarea
-                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-200 bg-white/80 text-gray-800 dark:text-gray-200 shadow-sm"
-                  value={medicalHistoryDraft}
-                  onChange={e => setMedicalHistoryDraft(e.target.value)}
-                  rows={3}
-                />
-              ) : (
-                <p className="text-gray-700 dark:text-gray-200 text-base font-medium min-h-[2.5rem]">{patient.medical_history || 'No medical history recorded.'}</p>
-              )}
-            </div>
-          </div>
-
-          {!isSupportUser && (
-            <div className="mb-10">
-              {followUpConfirmation && (
-                <div className="mb-4 p-3 bg-green-100 text-green-800 rounded-lg text-center font-semibold">
-                  {followUpConfirmation}
-                </div>
-              )}
-              <div className="bg-gradient-to-br from-blue-50 to-emerald-50 dark:from-gray-900 dark:to-gray-800 border-l-4 border-blue-400 rounded-2xl p-8 shadow mb-6">
-                <h3 className="text-lg font-semibold mb-4 text-blue-800 dark:text-blue-200 flex items-center gap-2"><Plus className="w-5 h-5 text-blue-400" />Add Visit Note</h3>
-                <form onSubmit={handleAddNote} className="space-y-8">
-                  {/* Visit Type */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2"><Calendar className="w-4 h-4 text-blue-400" />Visit Type</label>
-                    <div className="flex space-x-4">
-                      {['New', 'Follow-Up', 'Vaccination'].map((type) => (
-                        <label key={type} className="inline-flex items-center">
-                          <input
-                            type="radio"
-                            value={type}
-                            checked={visitType === type}
-                            onChange={(e) => setVisitType(e.target.value)}
-                            className="form-radio h-4 w-4 text-blue-600 dark:text-blue-300"
-                          />
-                          <span className="ml-2 text-gray-700 dark:text-gray-200">{type}</span>
-                        </label>
-                      ))}
+            
+            <div className="bg-gradient-to-br from-blue-50 to-emerald-50 dark:from-gray-900 dark:to-gray-800 border-l-4 border-blue-400 rounded-2xl p-8 shadow mb-6">
+              <h3 className="text-2xl font-bold mb-8 text-blue-800 dark:text-blue-200 flex items-center gap-2"><Plus className="w-6 h-6 text-blue-400" />Add Visit Note</h3>
+              <form onSubmit={handleAddNote} className="space-y-8">
+                {/* Two-column row: Visit Type (left), Medical History (right) */}
+                <div className="flex flex-col md:flex-row gap-6 mb-2">
+                  {/* Visit Type Card */}
+                  <div className="flex-1 bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
+                    <label className="block text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2">
+                      <Calendar className="w-5 h-5 text-blue-400" />Visit Type
+                    </label>
+                    <div className="text-lg font-bold text-gray-800 dark:text-gray-100">
+                      {getAppointmentTypeLabel(visitType || patient?.appointment_type)}
                     </div>
                   </div>
-
-                  {/* Chief Complaint */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-rose-400" />Chief Complaint <span className="text-gray-500 dark:text-gray-300">(Parent's or child's main concern)</span></label>
-                    <textarea
-                      value={chiefComplaint}
-                      onChange={(e) => setChiefComplaint(e.target.value)}
-                      className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                      rows="2"
-                      placeholder="e.g., Fever since 2 days, Cough and cold, Routine check-up"
-                    />
-                  </div>
-
-                  {/* Development */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2"><User className="w-4 h-4 text-emerald-400" />Development</label>
-                    <div className="space-y-2 flex flex-row items-center gap-6">
-                      <label className="inline-flex items-center">
-                        <input
-                          type="radio"
-                          value="Normal"
-                          checked={developmentStatus === 'Normal'}
-                          onChange={(e) => setDevelopmentStatus(e.target.value)}
-                          className="form-radio h-4 w-4 text-emerald-600 dark:text-emerald-300"
-                        />
-                        <span className="ml-2 text-gray-700 dark:text-gray-200">Normal</span>
-                      </label>
-                      <label className="inline-flex items-center">
-                        <input
-                          type="radio"
-                          value="Delay"
-                          checked={developmentStatus === 'Delay'}
-                          onChange={(e) => setDevelopmentStatus(e.target.value)}
-                          className="form-radio h-4 w-4 text-rose-600"
-                        />
-                        <span className="ml-2 text-gray-700 dark:text-gray-200">Delay</span>
-                      </label>
-                      {developmentStatus === 'Delay' && (
-                        <input
-                          type="text"
-                          value={developmentDelayDetails}
-                          onChange={(e) => setDevelopmentDelayDetails(e.target.value)}
-                          className="ml-4 rounded-lg border-gray-300 shadow-sm focus:border-rose-500 focus:ring-2 focus:ring-rose-200"
-                          placeholder="Specify: speech/motor/cognitive"
-                        />
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Physical Exam */}
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2"><Heart className="w-4 h-4 text-pink-400" />Physical Exam Summary</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {[
-                        { key: 'general', label: 'General', options: ['Active', 'Dull'] },
-                        { key: 'chest_lungs', label: 'Chest/Lungs', options: ['Clear', 'Congested'] },
-                        { key: 'abdomen', label: 'Abdomen', options: ['Soft', 'Tender'] },
-                        { key: 'skin', label: 'Skin', options: ['Normal', 'Rashes'] },
-                        { key: 'ent', label: 'ENT', options: ['Normal', 'Infection'] }
-                      ].map(({ key, label, options }) => (
-                        <div key={key} className="space-y-2">
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2"><Check className="w-4 h-4 text-blue-400" />{label}</label>
-                          <div className="flex space-x-4">
-                            {options.map((option) => (
-                              <label key={option} className="inline-flex items-center">
-                                <input
-                                  type="radio"
-                                  name={key}
-                                  value={option}
-                                  checked={physicalExam[key] === option}
-                                  onChange={(e) => setPhysicalExam({ ...physicalExam, [key]: e.target.value })}
-                                  className="form-radio h-4 w-4 text-blue-600 dark:text-blue-300"
-                                />
-                                <span className="ml-2 text-gray-700 dark:text-gray-200">{option}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Diagnosis */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-yellow-400" />Diagnosis <span className="text-gray-500 dark:text-gray-300">(e.g., Upper respiratory tract infection, Gastroenteritis)</span></label>
-                    <input
-                      type="text"
-                      value={diagnosis}
-                      onChange={(e) => setDiagnosis(e.target.value)}
-                      className="w-full rounded-lg border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200"
-                      placeholder="Enter diagnosis"
-                    />
-                  </div>
-
-                  {/* Treatment Plan */}
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2"><Plus className="w-4 h-4 text-emerald-400" />Treatment Plan</h4>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Medications</label>
-                        <textarea
-                          value={treatmentPlan.medications}
-                          onChange={(e) => setTreatmentPlan({ ...treatmentPlan, medications: e.target.value })}
-                          className="w-full rounded-lg border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
-                          rows="2"
-                          placeholder="e.g., Paracetamol drops, Syrup XYZ"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Advice/Counseling</label>
-                        <textarea
-                          value={treatmentPlan.advice}
-                          onChange={(e) => setTreatmentPlan({ ...treatmentPlan, advice: e.target.value })}
-                          className="w-full rounded-lg border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
-                          rows="2"
-                          placeholder="e.g., Hydration, Light meals, Hygiene tips"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Follow-up Section in Add Visit Note */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2"><Calendar className="w-4 h-4 text-blue-400" />Is follow-up required?</label>
-                    <div className="flex items-center gap-6 mb-2">
-                      <label className="inline-flex items-center">
-                        <input
-                          type="radio"
-                          name="followup_required"
-                          value="no"
-                          checked={!followUpRequired}
-                          onChange={() => setFollowUpRequired(false)}
-                          className="form-radio h-4 w-4 text-blue-600 dark:text-blue-300"
-                        />
-                        <span className="ml-2 text-gray-700 dark:text-gray-200">No</span>
-                      </label>
-                      <label className="inline-flex items-center">
-                        <input
-                          type="radio"
-                          name="followup_required"
-                          value="yes"
-                          checked={followUpRequired}
-                          onChange={() => {
-                            setFollowUpRequired(true);
-                            setShowAppointmentScheduler(true);
-                          }}
-                          className="form-radio h-4 w-4 text-blue-600 dark:text-blue-300"
-                        />
-                        <span className="ml-2 text-gray-700 dark:text-gray-200">Yes</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Vitals Section */}
-                  <div className="mb-8">
+                  {/* Medical History Card (with edit button for doctor/admin) */}
+                  <div className="flex-1 bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
                     <div className="flex items-center justify-between mb-2">
-                      <label className="text-lg font-bold text-pink-700 flex items-center gap-2">
-                        <Heart className="w-5 h-5 text-pink-400" />Vitals
+                      <label className="block text-lg font-semibold text-blue-700 flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-blue-400" />Medical History
                       </label>
-                      <button
-                        className="flex items-center gap-1 text-pink-700 hover:text-pink-900 focus:outline-none focus:ring-2 focus:ring-pink-300 rounded px-2 py-1"
-                        onClick={() => setExpandedVitals(v => !v)}
-                        aria-expanded={expandedVitals}
-                      >
-                        {expandedVitals ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                      </button>
-                    </div>
-                    <div className={`overflow-hidden transition-all duration-500 ${expandedVitals ? 'max-h-[2000px] py-2' : 'max-h-0 py-0'}`} style={{ transitionProperty: 'max-height, padding' }}>
-                      {expandedVitals && (
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 bg-white rounded-2xl shadow-lg p-6 border border-pink-100">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1"><Heart className="w-4 h-4 text-pink-400" />Height (cm)</label>
-                            <input
-                              type="number"
-                              value={vitals.height}
-                              onChange={(e) => handleVitalChange('height', e.target.value)}
-                              className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-200 ${vitalWarnings.height ? 'border-red-500' : ''}`}
-                              placeholder="Height"
-                              step="0.1"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">Range: 45-120 cm</p>
-                            {vitalWarnings.height && (
-                              <p className="text-red-500 text-xs mt-1">{vitalWarnings.height}</p>
-                            )}
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1"><Heart className="w-4 h-4 text-pink-400" />Weight (kg)</label>
-                            <input
-                              type="number"
-                              value={vitals.weight}
-                              onChange={(e) => handleVitalChange('weight', e.target.value)}
-                              className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-200 ${vitalWarnings.weight ? 'border-red-500' : ''}`}
-                              placeholder="Weight"
-                              step="0.1"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">Range: 2-40 kg</p>
-                            {vitalWarnings.weight && (
-                              <p className="text-red-500 text-xs mt-1">{vitalWarnings.weight}</p>
-                            )}
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1"><AlertTriangle className="w-4 h-4 text-yellow-400" />Temperature (°F)</label>
-                            <input
-                              type="number"
-                              value={vitals.temperature}
-                              onChange={(e) => handleVitalChange('temperature', e.target.value)}
-                              className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 ${vitalWarnings.temperature ? 'border-red-500' : ''}`}
-                              placeholder="Temperature"
-                              step="0.1"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">Range: 97-100.4 °F</p>
-                            {vitalWarnings.temperature && (
-                              <p className="text-red-500 text-xs mt-1">{vitalWarnings.temperature}</p>
-                            )}
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1"><Heart className="w-4 h-4 text-pink-400" />Heart Rate (bpm)</label>
-                            <input
-                              type="number"
-                              value={vitals.heartRate}
-                              onChange={(e) => handleVitalChange('heartRate', e.target.value)}
-                              className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-200 ${vitalWarnings.heartRate ? 'border-red-500' : ''}`}
-                              placeholder="Heart Rate"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">Range: 80-160 bpm</p>
-                            {vitalWarnings.heartRate && (
-                              <p className="text-red-500 text-xs mt-1">{vitalWarnings.heartRate}</p>
-                            )}
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1"><Heart className="w-4 h-4 text-pink-400" />Blood Pressure</label>
-                            <input
-                              type="text"
-                              value={vitals.bloodPressure}
-                              onChange={(e) => handleVitalChange('bloodPressure', e.target.value)}
-                              className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-200 ${vitalWarnings.bloodPressure ? 'border-red-500' : ''}`}
-                              placeholder="e.g., 90/60"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">Range: 80/50 - 120/80 mmHg</p>
-                            {vitalWarnings.bloodPressure && (
-                              <p className="text-red-500 text-xs mt-1">{vitalWarnings.bloodPressure}</p>
-                            )}
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1"><Heart className="w-4 h-4 text-pink-400" />Head Circumference (cm)</label>
-                            <input
-                              type="number"
-                              value={vitals.headCircumference}
-                              onChange={(e) => handleVitalChange('headCircumference', e.target.value)}
-                              className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-200 ${vitalWarnings.headCircumference ? 'border-red-500' : ''}`}
-                              placeholder="Head Circumference"
-                              step="0.1"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">Range: 32-52 cm</p>
-                            {vitalWarnings.headCircumference && (
-                              <p className="text-red-500 text-xs mt-1">{vitalWarnings.headCircumference}</p>
-                            )}
-                          </div>
+                      {canEditMedicalHistory && !editingMedicalHistory && (
+                        <button
+                          className="inline-flex items-center gap-1 px-4 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 font-semibold shadow hover:bg-blue-200 dark:hover:bg-blue-800 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-blue-300 border border-blue-200 dark:border-gray-700"
+                          onClick={() => setEditingMedicalHistory(true)}
+                          type="button"
+                          title="Edit Medical History"
+                        >
+                          <Edit className="w-4 h-4" />Edit
+                        </button>
+                      )}
+                      {canEditMedicalHistory && editingMedicalHistory && (
+                        <div className="flex gap-2">
+                          <button
+                            className="inline-flex items-center gap-1 px-4 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:text-emerald-200 font-semibold shadow hover:bg-emerald-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                            onClick={handleSaveMedicalHistory}
+                            type="button"
+                            title="Save Medical History"
+                          >
+                            <Check className="w-4 h-4" />Save
+                          </button>
+                          <button
+                            className="inline-flex items-center gap-1 px-4 py-1 rounded-full bg-gray-100 text-gray-700 dark:text-gray-200 font-semibold shadow hover:bg-gray-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                            onClick={() => { setEditingMedicalHistory(false); setMedicalHistoryDraft(patient.medical_history || ''); }}
+                            type="button"
+                            title="Cancel Edit"
+                          >
+                            <X className="w-4 h-4" />Cancel
+                          </button>
                         </div>
                       )}
                     </div>
+                    {editingMedicalHistory ? (
+                      <textarea
+                        className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-200 bg-white/80 text-gray-800 dark:text-gray-200 shadow-sm"
+                        value={medicalHistoryDraft}
+                        onChange={e => setMedicalHistoryDraft(e.target.value)}
+                        rows={3}
+                      />
+                    ) : (
+                      <p className="text-gray-700 dark:text-gray-200 text-base font-medium min-h-[2.5rem]">{patient.medical_history || 'No medical history recorded.'}</p>
+                    )}
                   </div>
+                </div>
 
-                  {error && (
-                    <div className="text-red-500 text-sm mt-2">
-                      {error}
-                    </div>
-                  )}
-
-                  {/* Floating Action Button for Add Note (mobile) */}
-                  <div className="flex justify-end">
+                {/* Vitals Card */}
+                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 mb-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-lg font-bold text-pink-700 flex items-center gap-2">
+                      <Heart className="w-5 h-5 text-pink-400" />Vitals
+                    </label>
                     <button
-                      type="submit"
-                      className="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50"
-                      disabled={savingNote}
+                      className="flex items-center gap-1 text-pink-700 hover:text-pink-900 focus:outline-none focus:ring-2 focus:ring-pink-300 rounded px-2 py-1"
+                      onClick={() => setExpandedVitals(v => !v)}
+                      aria-expanded={expandedVitals}
+                      type="button"
                     >
-                      {savingNote ? (
-                        <span className="flex items-center gap-2">
-                          <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg>
-                          Saving...
-                        </span>
-                      ) : (
-                        'Add Note'
-                      )}
+                      {expandedVitals ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                     </button>
                   </div>
-                </form>
-              </div>
+                  <div className={`overflow-hidden transition-all duration-500 ${expandedVitals ? 'max-h-[2000px] py-2' : 'max-h-0 py-0'}`} style={{ transitionProperty: 'max-height, padding' }}>
+                    {expandedVitals && (
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-6 bg-white rounded-2xl shadow-lg p-6 border border-pink-100">
+                        <div>
+                          <label className="block text-base font-medium text-gray-700 mb-1 flex items-center gap-1"><Heart className="w-5 h-5 text-pink-400" />Height (cm)</label>
+                          <input
+                            type="number"
+                            value={vitals.height}
+                            onChange={(e) => handleVitalChange('height', e.target.value)}
+                            className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-200 text-base p-2 ${vitalWarnings.height ? 'border-red-500' : ''}`}
+                            placeholder="Height"
+                            step="0.1"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Range: 45-120 cm</p>
+                          {vitalWarnings.height && (
+                            <p className="text-red-500 text-xs mt-1">{vitalWarnings.height}</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-base font-medium text-gray-700 mb-1 flex items-center gap-1"><Heart className="w-5 h-5 text-pink-400" />Weight (kg)</label>
+                          <input
+                            type="number"
+                            value={vitals.weight}
+                            onChange={(e) => handleVitalChange('weight', e.target.value)}
+                            className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-200 text-base p-2 ${vitalWarnings.weight ? 'border-red-500' : ''}`}
+                            placeholder="Weight"
+                            step="0.1"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Range: 2-40 kg</p>
+                          {vitalWarnings.weight && (
+                            <p className="text-red-500 text-xs mt-1">{vitalWarnings.weight}</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-base font-medium text-gray-700 mb-1 flex items-center gap-1"><AlertTriangle className="w-4 h-4 text-yellow-400" />Temperature (°F)</label>
+                          <input
+                            type="number"
+                            value={vitals.temperature}
+                            onChange={(e) => handleVitalChange('temperature', e.target.value)}
+                            className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 text-base p-2 ${vitalWarnings.temperature ? 'border-red-500' : ''}`}
+                            placeholder="Temperature"
+                            step="0.1"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Range: 97-100.4 °F</p>
+                          {vitalWarnings.temperature && (
+                            <p className="text-red-500 text-xs mt-1">{vitalWarnings.temperature}</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-base font-medium text-gray-700 mb-1 flex items-center gap-1"><Heart className="w-5 h-5 text-pink-400" />Heart Rate (bpm)</label>
+                          <input
+                            type="number"
+                            value={vitals.heartRate}
+                            onChange={(e) => handleVitalChange('heartRate', e.target.value)}
+                            className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-200 text-base p-2 ${vitalWarnings.heartRate ? 'border-red-500' : ''}`}
+                            placeholder="Heart Rate"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Range: 80-160 bpm</p>
+                          {vitalWarnings.heartRate && (
+                            <p className="text-red-500 text-xs mt-1">{vitalWarnings.heartRate}</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-base font-medium text-gray-700 mb-1 flex items-center gap-1"><Heart className="w-5 h-5 text-pink-400" />Blood Pressure</label>
+                          <input
+                            type="text"
+                            value={vitals.bloodPressure}
+                            onChange={(e) => handleVitalChange('bloodPressure', e.target.value)}
+                            className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-200 text-base p-2 ${vitalWarnings.bloodPressure ? 'border-red-500' : ''}`}
+                            placeholder="e.g., 90/60"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Range: 80/50 - 120/80 mmHg</p>
+                          {vitalWarnings.bloodPressure && (
+                            <p className="text-red-500 text-xs mt-1">{vitalWarnings.bloodPressure}</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-base font-medium text-gray-700 mb-1 flex items-center gap-1"><Heart className="w-5 h-5 text-pink-400" />Head Circumference (cm)</label>
+                          <input
+                            type="number"
+                            value={vitals.headCircumference}
+                            onChange={(e) => handleVitalChange('headCircumference', e.target.value)}
+                            className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-pink-500 focus:ring-2 focus:ring-pink-200 text-base p-2 ${vitalWarnings.headCircumference ? 'border-red-500' : ''}`}
+                            placeholder="Head Circumference"
+                            step="0.1"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Range: 32-52 cm</p>
+                          {vitalWarnings.headCircumference && (
+                            <p className="text-red-500 text-xs mt-1">{vitalWarnings.headCircumference}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+              
+
+                {/* Chief Complaint */}
+                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 mb-2">
+                  <label className="block text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-rose-400" />Chief Complaint <span className="text-gray-500 dark:text-gray-300 text-base font-normal">(Parent's or child's main concern)</span></label>
+                  <textarea
+                    value={chiefComplaint}
+                    onChange={(e) => setChiefComplaint(e.target.value)}
+                    className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-base p-3"
+                    rows="2"
+                    placeholder="e.g., Fever since 2 days, Cough and cold, Routine check-up"
+                  />
+                </div>
+
+                {/* Development */}
+                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 mb-2">
+                  <label className="block text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2"><User className="w-5 h-5 text-emerald-400" />Development</label>
+                  <div className="space-y-2 flex flex-row items-center gap-6">
+                    <label className="inline-flex items-center">
+                      <input
+                        type="radio"
+                        value="Normal"
+                        checked={developmentStatus === 'Normal'}
+                        onChange={(e) => setDevelopmentStatus(e.target.value)}
+                        className="form-radio h-5 w-5 text-emerald-600 dark:text-emerald-300"
+                      />
+                      <span className="ml-2 text-gray-700 dark:text-gray-200 text-base">Normal</span>
+                    </label>
+                    <label className="inline-flex items-center">
+                      <input
+                        type="radio"
+                        value="Delay"
+                        checked={developmentStatus === 'Delay'}
+                        onChange={(e) => setDevelopmentStatus(e.target.value)}
+                        className="form-radio h-5 w-5 text-rose-600"
+                      />
+                      <span className="ml-2 text-gray-700 dark:text-gray-200 text-base">Delay</span>
+                    </label>
+                    {developmentStatus === 'Delay' && (
+                      <input
+                        type="text"
+                        value={developmentDelayDetails}
+                        onChange={(e) => setDevelopmentDelayDetails(e.target.value)}
+                        className="ml-4 rounded-lg border-gray-300 shadow-sm focus:border-rose-500 focus:ring-2 focus:ring-rose-200 text-base p-2"
+                        placeholder="Specify: speech/motor/cognitive"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {/* Physical Exam */}
+                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 mb-2">
+                  <h4 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2"><Heart className="w-5 h-5 text-pink-400" />Physical Exam Summary</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {[
+                      { key: 'general', label: 'General', options: ['Active', 'Dull'] },
+                      { key: 'chest_lungs', label: 'Chest/Lungs', options: ['Clear', 'Congested'] },
+                      { key: 'abdomen', label: 'Abdomen', options: ['Soft', 'Tender'] },
+                      { key: 'skin', label: 'Skin', options: ['Normal', 'Rashes'] },
+                      { key: 'ent', label: 'ENT', options: ['Normal', 'Infection'] }
+                    ].map(({ key, label, options }) => (
+                      <div key={key} className="space-y-2">
+                        <label className="block text-base font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2"><Check className="w-4 h-4 text-blue-400" />{label}</label>
+                        <div className="flex space-x-6">
+                          {options.map((option) => (
+                            <label key={option} className="inline-flex items-center">
+                              <input
+                                type="radio"
+                                name={key}
+                                value={option}
+                                checked={physicalExam[key] === option}
+                                onChange={(e) => setPhysicalExam({ ...physicalExam, [key]: e.target.value })}
+                                className="form-radio h-5 w-5 text-blue-600 dark:text-blue-300"
+                              />
+                              <span className="ml-2 text-gray-700 dark:text-gray-200 text-base">{option}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Diagnosis */}
+                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 mb-2">
+                  <label className="block text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-yellow-400" />Diagnosis <span className="text-gray-500 dark:text-gray-300 text-base font-normal">(e.g., Upper respiratory tract infection, Gastroenteritis)</span></label>
+                  <input
+                    type="text"
+                    value={diagnosis}
+                    onChange={(e) => setDiagnosis(e.target.value)}
+                    className="w-full rounded-lg border-gray-300 shadow-sm focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 text-base p-3"
+                    placeholder="Enter diagnosis"
+                  />
+                </div>
+
+                {/* Treatment Plan */}
+                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 mb-2">
+                  <h4 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2"><Plus className="w-5 h-5 text-emerald-400" />Treatment Plan</h4>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-base font-medium text-gray-700 dark:text-gray-200 mb-2">Medications</label>
+                      <textarea
+                        value={treatmentPlan.medications}
+                        onChange={(e) => setTreatmentPlan({ ...treatmentPlan, medications: e.target.value })}
+                        className="w-full rounded-lg border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 text-base p-3"
+                        rows="2"
+                        placeholder="e.g., Paracetamol drops, Syrup XYZ"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-base font-medium text-gray-700 dark:text-gray-200 mb-2">Advice/Counseling</label>
+                      <textarea
+                        value={treatmentPlan.advice}
+                        onChange={(e) => setTreatmentPlan({ ...treatmentPlan, advice: e.target.value })}
+                        className="w-full rounded-lg border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 text-base p-3"
+                        rows="2"
+                        placeholder="e.g., Hydration, Light meals, Hygiene tips"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Follow-up Section in Add Visit Note */}
+                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 mb-2">
+                  <label className="block text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2"><Calendar className="w-5 h-5 text-blue-400" />Is follow-up required?</label>
+                  <div className="flex items-center gap-8 mb-2">
+                    <label className="inline-flex items-center">
+                      <input
+                        type="radio"
+                        name="followup_required"
+                        value="no"
+                        checked={!followUpRequired}
+                        onChange={() => setFollowUpRequired(false)}
+                        className="form-radio h-5 w-5 text-blue-600 dark:text-blue-300"
+                      />
+                      <span className="ml-2 text-gray-700 dark:text-gray-200 text-base">No</span>
+                    </label>
+                    <label className="inline-flex items-center">
+                      <input
+                        type="radio"
+                        name="followup_required"
+                        value="yes"
+                        checked={followUpRequired}
+                        onChange={() => {
+                          setFollowUpRequired(true);
+                          setShowAppointmentScheduler(true);
+                        }}
+                        className="form-radio h-5 w-5 text-blue-600 dark:text-blue-300"
+                      />
+                      <span className="ml-2 text-gray-700 dark:text-gray-200 text-base">Yes</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Save Button */}
+                <div className="flex flex-col md:flex-row md:items-center gap-4 mt-4">
+                  {/* AI Assessment Button and Result (new color shade) */}
+                  <button
+                    type="button"
+                    onClick={handleAIAssessmentDraft}
+                    className="bg-gradient-to-r from-emerald-500 to-teal-400 text-white font-bold py-3 px-8 rounded-full shadow-lg text-lg focus:outline-none focus:ring-2 focus:ring-emerald-300 transition-all duration-200 disabled:opacity-60 mb-2"
+                    disabled={aiDraftLoading}
+                  >
+                    {aiDraftLoading ? 'Getting AI Assessment...' : 'AI Assessment'}
+                  </button>
+                  {aiDraftError && <p className="text-red-500 text-sm">{aiDraftError}</p>}
+                  {aiDraft && (
+                    <div className="w-full bg-emerald-50 dark:bg-gray-800 border-l-4 border-emerald-400 rounded-lg p-4 mt-2 text-gray-800 dark:text-gray-100 whitespace-pre-line">
+                      <span className="font-semibold text-emerald-700 dark:text-emerald-200">AI Assessment:</span>
+                      <div className="mt-2">{aiDraft}</div>
+                    </div>
+                  )}
+                  {/* Save Visit Note Button */}
+                  <button
+                    type="submit"
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-full shadow-lg text-lg focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all duration-200"
+                    disabled={savingNote}
+                  >
+                    {savingNote ? 'Saving...' : 'Save Visit Note'}
+                  </button>
+                </div>
+              </form>
             </div>
-          )}
+          </div>
 
           {/* Previous Notes */}
           <div className="mb-8">
@@ -1307,7 +1561,7 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
                         >
                           {expanded ? <><X className="w-4 h-4" />Collapse</> : <><Plus className="w-4 h-4" />Expand</>}
                         </button>
-                        <div className={`transition-all duration-300 ${expanded ? 'max-h-[2000px] opacity-100' : 'max-h-[180px] overflow-hidden opacity-80'} relative`}> 
+                        <div className={`transition-all duration-300 ${expanded ? 'max-h-[2000px] opacity-100' : 'max-h-[180px] overflow-hidden opacity-80'} relative`}>
                           {/* Chief Complaint */}
                           {note.chief_complaint && (
                             <div className="mt-3">
@@ -1487,6 +1741,12 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
                           >
                             Send to Telegram
                           </button>
+                          {note.ai_response && (
+                            <div className="mt-3">
+                              <h4 className="text-sm font-semibold text-blue-700 flex items-center gap-2">AI Assessment</h4>
+                              <p className="text-gray-800 whitespace-pre-line bg-blue-50 rounded p-2 border border-blue-200 mt-1">{note.ai_response}</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -1526,6 +1786,69 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
                 if (onAppointmentScheduled) onAppointmentScheduled(appointment);
               }}
             />
+          </div>
+        </div>
+      )}
+      <div className="flex gap-2 mb-4">
+        <button
+          className="flex items-center gap-2 px-4 py-2 rounded bg-blue-600 text-white font-semibold shadow hover:bg-blue-700 transition"
+          onClick={() => {
+            // Email validation logic
+            const email = patient.guardian_email;
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!email || !emailRegex.test(email)) {
+              alert('Email is not configured for this user');
+              return;
+            }
+            setShowEmailModal(true);
+          }}
+          title={patient.guardian_email ? 'Send email to guardian' : 'No guardian email available'}
+        >
+          <Mail className="w-5 h-5" />
+          Send Email
+        </button>
+        {/* ... other action buttons ... */}
+      </div>
+      {/* Email Modal */}
+      {showEmailModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-lg p-6 relative">
+            <button className="absolute top-2 right-2 text-gray-500 hover:text-gray-800" onClick={() => setShowEmailModal(false)}><X className="w-5 h-5" /></button>
+            <h2 className="text-lg font-bold mb-4 text-blue-700 dark:text-blue-200">Send Email to Guardian</h2>
+            <div className="mb-4">
+              <label className="block font-medium mb-2">Choose what to send:</label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="emailOption" value="notes" checked={emailOption === 'notes'} onChange={() => setEmailOption('notes')} />
+                  Visit Notes
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="emailOption" value="vaccination" checked={emailOption === 'vaccination'} onChange={() => setEmailOption('vaccination')} />
+                  Vaccination Details
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="emailOption" value="both" checked={emailOption === 'both'} onChange={() => setEmailOption('both')} />
+                  Both
+                </label>
+              </div>
+            </div>
+            <div className="mb-4">
+              <label className="block font-medium mb-2">Email Subject:</label>
+              <input type="text" className="w-full border rounded px-3 py-2" value={emailSubject} onChange={e => setEmailSubject(e.target.value)} />
+            </div>
+            <div className="mb-4">
+              <label className="block font-medium mb-2">Email Content (HTML):</label>
+              <textarea className="w-full border rounded px-3 py-2 min-h-[120px] font-mono" value={emailContent} onChange={e => setEmailContent(e.target.value)} />
+            </div>
+            {emailError && <div className="text-red-600 mb-2">{emailError}</div>}
+            {emailSuccess && <div className="text-green-600 mb-2">{emailSuccess}</div>}
+            <button
+              className="w-full py-2 rounded bg-blue-600 text-white font-semibold shadow hover:bg-blue-700 transition disabled:opacity-60"
+              onClick={handleSendEmail}
+              disabled={emailSending}
+            >
+              {emailSending ? 'Sending...' : 'Send Email'}
+            </button>
           </div>
         </div>
       )}

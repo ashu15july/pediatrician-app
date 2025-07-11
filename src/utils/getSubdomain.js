@@ -12,14 +12,13 @@ export function getSubdomain() {
       return testSubdomain;
     }
     
-    // Check localStorage for stored subdomain (for dashboard routes)
-    const storedSubdomain = localStorage.getItem('currentClinicSubdomain');
-    if (storedSubdomain) {
-      return storedSubdomain;
+    // Only use stored subdomain for non-root routes
+    if (window.location.pathname !== '/' && localStorage.getItem('currentClinicSubdomain')) {
+      return localStorage.getItem('currentClinicSubdomain');
     }
   }
   
-  // Extract subdomain from hostname
+  // Extract subdomain from hostname (for production)
   const parts = hostname.split('.');
   if (parts.length > 2) {
     const subdomain = parts[0];

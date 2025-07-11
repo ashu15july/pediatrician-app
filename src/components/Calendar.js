@@ -53,6 +53,9 @@ const Calendar = ({
   const [appointmentToCancel, setAppointmentToCancel] = useState(null);
   const [cancellingAppointment, setCancellingAppointment] = useState(false);
   const [expandedVitals, setExpandedVitals] = useState(true);
+  const [aiLoading, setAiLoading] = useState({});
+  const [aiResponse, setAiResponse] = useState({});
+  const [aiError, setAiError] = useState({});
 
   const getPatientById = (id) => {
     return patients.find(p => p.id === id);
@@ -320,6 +323,27 @@ const Calendar = ({
         )}
       </div>
     );
+  };
+
+  const handleAIAssessment = async (appointment, patient) => {
+    setAiLoading(prev => ({ ...prev, [appointment.id]: true }));
+    setAiError(prev => ({ ...prev, [appointment.id]: null }));
+    try {
+      const res = await fetch('/api/ai-doctor-feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          notes: appointment.notes || '',
+          patient: patient
+        })
+      });
+      const data = await res.json();
+      setAiResponse(prev => ({ ...prev, [appointment.id]: data }));
+    } catch (err) {
+      setAiError(prev => ({ ...prev, [appointment.id]: 'Failed to get AI feedback.' }));
+    } finally {
+      setAiLoading(prev => ({ ...prev, [appointment.id]: false }));
+    }
   };
 
   const renderAppointments = () => {

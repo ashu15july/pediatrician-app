@@ -98,6 +98,7 @@ export const getVisitNotes = async (patientId, clinicId) => {
       .eq('clinic_id', clinicId)
       .order('visit_date', { ascending: false });
     if (error) throw error;
+    // ai_response is included by default in *
     return data;
   } catch (error) {
     handleSupabaseError(error, 'fetch visit notes');
@@ -138,7 +139,8 @@ export const addVisitNote = async (noteData) => {
         treatment_plan: noteData.treatment_plan,
         follow_up_date: noteData.follow_up_date,
         follow_up_notes: noteData.follow_up_notes,
-        development_milestones: noteData.development_milestones
+        development_milestones: noteData.development_milestones,
+        ai_response: noteData.ai_response || null
       }])
       .select()
       .single();
