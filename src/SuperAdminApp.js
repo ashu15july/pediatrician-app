@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
+import WhatsAppConfigForm from './components/WhatsAppConfigForm';
 
 const SuperAdminApp = () => {
   const [clinics, setClinics] = useState([]);
@@ -12,6 +13,8 @@ const SuperAdminApp = () => {
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [selectedClinic, setSelectedClinic] = useState(null);
+  const [showWhatsAppConfig, setShowWhatsAppConfig] = useState(false);
 
   useEffect(() => {
     fetchClinics();
@@ -181,8 +184,14 @@ const SuperAdminApp = () => {
                         {new Date(clinic.created_at).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <button className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-3" disabled>
-                          Edit
+                        <button 
+                          onClick={() => {
+                            setSelectedClinic(clinic);
+                            setShowWhatsAppConfig(true);
+                          }}
+                          className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-3"
+                        >
+                          Configure WhatsApp
                         </button>
                         <button className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300" disabled>
                           Delete
@@ -196,6 +205,39 @@ const SuperAdminApp = () => {
           </div>
         )}
       </div>
+
+      {/* WhatsApp Configuration Modal */}
+      {showWhatsAppConfig && selectedClinic && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                  Configure WhatsApp for {selectedClinic.name}
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowWhatsAppConfig(false);
+                    setSelectedClinic(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              <WhatsAppConfigForm 
+                clinicId={selectedClinic.id}
+                onSuccess={(clinic) => {
+                  console.log('WhatsApp configured successfully for:', clinic.name);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -83,6 +83,30 @@ const AppointmentScheduler = ({ patient, onClose, onAppointmentScheduled, defaul
         .select()
         .single();
       if (error) throw error;
+      // Send appointment confirmation email if patient has email
+      // Always log patient info for debugging
+      if (patient.guardian_email) {
+        try {
+          const response = await fetch('/api/send-appointment-confirmation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              patientEmail: patient.guardian_email,
+              patientName: patient.name,
+              appointmentDate: formattedDate,
+              appointmentTime: selectedTime,
+              doctorName: (doctors.find(d => d.id === selectedDoctor)?.full_name) || '',
+              clinicName: clinic.name,
+              clinicAddress: clinic.address || '',
+              clinicPhone: clinic.phone || '',
+              notes: reason || ''
+            })
+          });
+          const responseBody = await response.json().catch(() => ({}));
+        } catch (err) {
+          console.error('Failed to send appointment confirmation email:', err);
+        }
+      }
       onAppointmentScheduled(data);
       onClose();
     } catch (err) {

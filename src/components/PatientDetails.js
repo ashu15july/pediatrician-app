@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Plus, FileText, Calendar, User, Phone, MapPin, Heart, AlertTriangle, Check, Clock, Edit, Trash2, Activity, Syringe, ChevronUp, ChevronDown, Mail } from 'lucide-react';
+import { X, Plus, FileText, Calendar, User, Phone, MapPin, Heart, AlertTriangle, Check, Clock, Edit, Trash2, Activity, Syringe, ChevronUp, ChevronDown, Mail, MessageCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useClinicAuth } from '../contexts/ClinicAuthContext';
 import { addVisitNote, getVisitNotes } from '../services/patientService';
@@ -141,6 +141,37 @@ function getAppointmentTypeLabel(type) {
   }
 }
 
+// Move sendWhatsAppMessage to outside the PatientDetails component
+async function sendWhatsAppMessage({ userId, clinicId, patientId, messageType, templateParams }) {
+  const res = await fetch('/api/send-whatsapp-message', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, clinicId, patientId, messageType, templateParams })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to send WhatsApp message');
+  return data;
+}
+
+// Helper to map legacy/invalid visit types to allowed values
+const normalizeVisitType = (type) => {
+  switch ((type || '').toLowerCase()) {
+    case 'checkup':
+    case 'check-up':
+    case 'new':
+      return 'Check-up';
+    case 'followup':
+    case 'follow-up':
+      return 'Follow-up';
+    case 'emergency':
+      return 'Emergency';
+    case 'vaccination':
+      return 'Vaccination';
+    default:
+      return 'Check-up'; // fallback
+  }
+};
+
 const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled, onUpdate, onDelete }) => {
   // Determine which permission function to use
   const { hasPermission: authHasPermission, currentUser: authUser } = useAuth();
@@ -152,7 +183,7 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [visitType, setVisitType] = useState('New');
+  const [visitType, setVisitType] = useState('Check-up');
   const [chiefComplaint, setChiefComplaint] = useState('');
   const [developmentStatus, setDevelopmentStatus] = useState('Normal');
   const [developmentDelayDetails, setDevelopmentDelayDetails] = useState('');
@@ -226,11 +257,15 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
 
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailOption, setEmailOption] = useState('notes'); // 'notes', 'vaccination', or 'both'
-  const [emailContent, setEmailContent] = useState('');
   const [emailSubject, setEmailSubject] = useState('');
   const [emailSending, setEmailSending] = useState(false);
   const [emailSuccess, setEmailSuccess] = useState(null);
   const [emailError, setEmailError] = useState(null);
+
+  // Add state for WhatsApp sending
+  const [whatsappSending, setWhatsappSending] = useState(false);
+  const [whatsappSuccess, setWhatsappSuccess] = useState(null);
+  const [whatsappError, setWhatsappError] = useState(null);
 
   // Helper to check if all required fields are filled
   const isNoteComplete = () => {
@@ -250,17 +285,12 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
         delivery_type: patient.delivery_type || null,
         birth_term: patient.birth_term || null,
         gestational_age_weeks: patient.gestational_age_weeks || null,
-        visit_type: visitType || null,
         chief_complaint: chiefComplaint || null,
         development_status: developmentStatus || null,
         development_delay_details: developmentStatus === 'Delay' ? developmentDelayDetails : null,
         physical_exam: physicalExam || null,
-        diagnosis: diagnosis || null,
-        treatment_plan: treatmentPlan || null,
         vitals: vitals || null,
-        development_milestones: milestoneStatus || null,
-        follow_up_required: !!followUpDate,
-        follow_up_notes: followUpNotes || null
+        development_milestones: milestoneStatus || null
       };
       const res = await fetch('/api/ai-doctor-feedback', {
         method: 'POST',
@@ -268,13 +298,15 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
         body: JSON.stringify({ clinical_context })
       });
       const data = await res.json();
-      if (!res.ok) {
-        setAiDraftError(data.error || 'Failed to get AI feedback.');
-        console.error('AI Assessment API error:', data);
-        return;
-      }
-      if (data.ai_notes) {
-        setAiDraft(data.ai_notes);
+      const hasDiagnosis = data && typeof data.diagnosis === 'string' && data.diagnosis.trim() !== '';
+      const hasTreatment = data && typeof data.treatment_plan === 'string' && data.treatment_plan.trim() !== '';
+      const hasFollowUp = data && Array.isArray(data.follow_up_questions) && data.follow_up_questions.length > 0;
+      if (hasDiagnosis || hasTreatment || hasFollowUp) {
+        setAiDraft(data);
+        setAiDraftError(null);
+      } else if (typeof data === 'string' && data.trim().length > 0) {
+        setAiDraft(data);
+        setAiDraftError(null);
       } else {
         setAiDraft('');
         setAiDraftError('No AI response received.');
@@ -550,7 +582,7 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
         user_id: activeUser.id, // was doctor_id
         clinic_id: clinic?.id,
         visit_date: selectedDate.toLocaleDateString('en-CA'),
-        visit_type: visitType,
+        visit_type: normalizeVisitType(visitType),
         chief_complaint: chiefComplaint,
         development_status: developmentStatus,
         development_delay_details: developmentStatus === 'Delay' ? developmentDelayDetails : null,
@@ -607,11 +639,38 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
           }
         ]);
         // Optionally handle apptError
+        // Send appointment confirmation email if patient has email
+        console.log('PatientDetails follow-up patient:', patient);
+        console.log('PatientDetails follow-up patient.guardian_email:', patient.guardian_email);
+        if (patient.guardian_email) {
+          try {
+            console.log('Sending appointment confirmation email to:', patient.guardian_email);
+            const response = await fetch('/api/send-appointment-confirmation', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                patientEmail: patient.guardian_email,
+                patientName: patient.name,
+                appointmentDate: followUpDate,
+                appointmentTime: '09:00',
+                doctorName: activeUser.full_name || '',
+                clinicName: clinic?.name || '',
+                clinicAddress: clinic?.address || '',
+                clinicPhone: clinic?.phone || '',
+                notes: followUpNotes || ''
+              })
+            });
+            const responseBody = await response.json().catch(() => ({}));
+            console.log('Appointment confirmation email response:', response.status, responseBody);
+          } catch (err) {
+            console.error('Failed to send appointment confirmation email:', err);
+          }
+        }
       }
       
       // Reset all form fields
       setNewNote('');
-      setVisitType('New');
+      setVisitType('Check-up');
       setChiefComplaint('');
       setDevelopmentStatus('Normal');
       setDevelopmentDelayDetails('');
@@ -710,7 +769,6 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
       html = generateNotesHtml() + generateVaccinationHtml();
     }
     setEmailSubject(subject);
-    setEmailContent(html);
   }, [emailOption, notes, patient]);
 
   // Send email handler
@@ -757,14 +815,44 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
         if (!error && data && data.type) {
           setVisitType(data.type);
         } else {
-          setVisitType('New'); // fallback
+          setVisitType('Check-up'); // fallback
         }
       } else {
-        setVisitType('New');
+        setVisitType('Check-up');
       }
     };
     fetchAppointmentType();
   }, [patient?.appointment_id]);
+
+  // Send WhatsApp handler
+  const handleSendWhatsApp = async () => {
+    setWhatsappSending(true);
+    setWhatsappSuccess(null);
+    setWhatsappError(null);
+    try {
+      const baseUrl = process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:3001' : window.location.origin);
+      const res = await fetch(`${baseUrl}/api/send-patient-whatsapp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patientId: patient.id,
+          whatsapp: patient.guardian_phone,
+          subject: emailSubject,
+          emailOption // reuse for PDF content selection
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setWhatsappSuccess('WhatsApp message sent successfully!');
+      } else {
+        setWhatsappError(data.error || 'Failed to send WhatsApp message');
+      }
+    } catch (err) {
+      setWhatsappError(err.message || 'Failed to send WhatsApp message');
+    } finally {
+      setWhatsappSending(false);
+    }
+  };
 
   if (!patient) {
     return null;
@@ -1170,9 +1258,16 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
                     <label className="block text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2">
                       <Calendar className="w-5 h-5 text-blue-400" />Visit Type
                     </label>
-                    <div className="text-lg font-bold text-gray-800 dark:text-gray-100">
-                      {getAppointmentTypeLabel(visitType || patient?.appointment_type)}
-                    </div>
+                    <select
+                      className="text-lg font-bold text-gray-800 dark:text-gray-100 rounded-lg border border-blue-200 px-4 py-2"
+                      value={visitType}
+                      onChange={e => setVisitType(e.target.value)}
+                    >
+                      <option value="Check-up">Check-up</option>
+                      <option value="Follow-up">Follow-up</option>
+                      <option value="Emergency">Emergency</option>
+                      <option value="Vaccination">Vaccination</option>
+                    </select>
                   </div>
                   {/* Medical History Card (with edit button for doctor/admin) */}
                   <div className="flex-1 bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6">
@@ -1418,6 +1513,72 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
                   </div>
                 </div>
 
+                {/* Move AI Assessment button and output here, above Diagnosis */}
+                <div className="flex flex-col md:flex-row md:items-center gap-4 mt-4 mb-4">
+                  <button
+                    type="button"
+                    onClick={handleAIAssessmentDraft}
+                    className="bg-gradient-to-r from-emerald-500 to-teal-400 text-white font-bold py-3 px-8 rounded-full shadow-lg text-lg focus:outline-none focus:ring-2 focus:ring-emerald-300 transition-all duration-200 disabled:opacity-60 mb-2"
+                    disabled={aiDraftLoading}
+                  >
+                    {aiDraftLoading ? 'Getting AI Assessment...' : 'AI Assessment'}
+                  </button>
+                  {aiDraftError && <p className="text-red-500 text-sm">{aiDraftError}</p>}
+                </div>
+                {/* Show AI Assessment output only if result is available and has content */}
+                {aiDraft && (() => {
+                  let parsedAIDraft = aiDraft;
+                  if (typeof aiDraft === 'string') {
+                    try {
+                      parsedAIDraft = JSON.parse(aiDraft);
+                    } catch {
+                      parsedAIDraft = { diagnosis: aiDraft };
+                    }
+                  }
+                  // Only show if at least one field is non-empty
+                  const hasContent =
+                    (parsedAIDraft.diagnosis && parsedAIDraft.diagnosis.trim() !== '') ||
+                    (parsedAIDraft.treatment_plan && parsedAIDraft.treatment_plan.trim() !== '') ||
+                    (parsedAIDraft.follow_up_questions && Array.isArray(parsedAIDraft.follow_up_questions) && parsedAIDraft.follow_up_questions.length > 0) ||
+                    (parsedAIDraft.advice_counselling && parsedAIDraft.advice_counselling.trim() !== '');
+
+                  if (!hasContent) return null;
+
+                  return (
+                    <div className="w-full bg-emerald-50 dark:bg-gray-800 border-l-4 border-emerald-400 rounded-lg p-4 mt-2 text-gray-800 dark:text-gray-100 whitespace-pre-line">
+                      <span className="font-semibold text-emerald-700 dark:text-emerald-200">AI Assessment:</span>
+                      <div className="mt-2">
+                        {parsedAIDraft.diagnosis && (
+                          <div className="mb-3">
+                            <h4 className="font-semibold text-blue-700 dark:text-blue-200 mb-1">Diagnosis</h4>
+                            <p>{parsedAIDraft.diagnosis}</p>
+                          </div>
+                        )}
+                        {parsedAIDraft.treatment_plan && (
+                          <div className="mb-3">
+                            <h4 className="font-semibold text-green-700 dark:text-green-200 mb-1">Treatment Plan</h4>
+                            <p>{parsedAIDraft.treatment_plan}</p>
+                          </div>
+                        )}
+                        {parsedAIDraft.follow_up_questions && parsedAIDraft.follow_up_questions.length > 0 && (
+                          <div className="mb-3">
+                            <h4 className="font-semibold text-purple-700 dark:text-purple-300 mb-1">Follow-up Questions</h4>
+                            <ul className="list-disc ml-6">
+                              {parsedAIDraft.follow_up_questions.map((item, idx) => <li key={idx}>{item}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                        {parsedAIDraft.advice_counselling && (
+                          <div className="mb-3">
+                            <h4 className="font-semibold text-emerald-700 dark:text-emerald-200 mb-1">Advice / Counselling</h4>
+                            <p>{parsedAIDraft.advice_counselling}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Diagnosis */}
                 <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 mb-2">
                   <label className="block text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-yellow-400" />Diagnosis <span className="text-gray-500 dark:text-gray-300 text-base font-normal">(e.g., Upper respiratory tract infection, Gastroenteritis)</span></label>
@@ -1491,23 +1652,6 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
 
                 {/* Save Button */}
                 <div className="flex flex-col md:flex-row md:items-center gap-4 mt-4">
-                  {/* AI Assessment Button and Result (new color shade) */}
-                  <button
-                    type="button"
-                    onClick={handleAIAssessmentDraft}
-                    className="bg-gradient-to-r from-emerald-500 to-teal-400 text-white font-bold py-3 px-8 rounded-full shadow-lg text-lg focus:outline-none focus:ring-2 focus:ring-emerald-300 transition-all duration-200 disabled:opacity-60 mb-2"
-                    disabled={aiDraftLoading}
-                  >
-                    {aiDraftLoading ? 'Getting AI Assessment...' : 'AI Assessment'}
-                  </button>
-                  {aiDraftError && <p className="text-red-500 text-sm">{aiDraftError}</p>}
-                  {aiDraft && (
-                    <div className="w-full bg-emerald-50 dark:bg-gray-800 border-l-4 border-emerald-400 rounded-lg p-4 mt-2 text-gray-800 dark:text-gray-100 whitespace-pre-line">
-                      <span className="font-semibold text-emerald-700 dark:text-emerald-200">AI Assessment:</span>
-                      <div className="mt-2">{aiDraft}</div>
-                    </div>
-                  )}
-                  {/* Save Visit Note Button */}
                   <button
                     type="submit"
                     className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-full shadow-lg text-lg focus:outline-none focus:ring-2 focus:ring-blue-300 transition-all duration-200"
@@ -1548,11 +1692,16 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
                         <div className="flex justify-between items-center mb-2">
                           <div>
                             <p className="text-lg font-bold text-blue-700 dark:text-blue-200 flex items-center gap-2"><Calendar className="w-4 h-4 text-blue-400" />{new Date(note.visit_date).toLocaleDateString()}</p>
-                            <p className="text-sm text-gray-500 dark:text-gray-300 font-medium flex items-center gap-2"><User className="w-4 h-4 text-blue-400" />Dr. {note.doctor?.full_name || 'Unknown'}</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-300 font-medium flex items-center gap-2">
+                              <User className="w-4 h-4 text-blue-400" />
+                              {note.doctor?.full_name
+                                ? (note.doctor.full_name.trim().toLowerCase().startsWith('dr')
+                                    ? note.doctor.full_name
+                                    : `Dr. ${note.doctor.full_name}`)
+                                : 'Unknown'}
+                            </p>
                           </div>
-                          <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${note.visit_type === 'New' ? 'bg-blue-100 text-blue-800' : note.visit_type === 'Follow-Up' ? 'bg-emerald-100 text-emerald-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                            {note.visit_type}
-                          </span>
+                          {/* Removed visit status pill */}
                         </div>
                         <button
                           className={`absolute top-6 right-6 inline-flex items-center gap-1 px-4 py-1 rounded-full font-semibold shadow transition-all duration-150 focus:outline-none focus:ring-2 ${expanded ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 focus:ring-emerald-300' : 'bg-blue-100 text-blue-700 hover:bg-blue-200 focus:ring-blue-300'}`}
@@ -1561,7 +1710,7 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
                         >
                           {expanded ? <><X className="w-4 h-4" />Collapse</> : <><Plus className="w-4 h-4" />Expand</>}
                         </button>
-                        <div className={`transition-all duration-300 ${expanded ? 'max-h-[2000px] opacity-100' : 'max-h-[180px] overflow-hidden opacity-80'} relative`}>
+                        <div className={`transition-all duration-300 ${expanded ? 'max-h-[2000px] opacity-100' : 'max-h-[180px] overflow-hidden opacity-80'} relative`}> 
                           {/* Chief Complaint */}
                           {note.chief_complaint && (
                             <div className="mt-3">
@@ -1638,24 +1787,7 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
                               </p>
                             </div>
                           )}
-                          {/* Show future appointment if exists for this note */}
-                          {(() => {
-                            // Find the first future appointment after this note's visit_date
-                            const futureAppt = futureAppointments.find(
-                              appt => new Date(appt.date) > new Date(note.visit_date)
-                            );
-                            if (futureAppt) {
-                              return (
-                                <div className="mt-3">
-                                  <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-200 flex items-center gap-2"><Calendar className="w-4 h-4 text-blue-400" />Follow-up</h4>
-                                  <p className="text-blue-700 dark:text-blue-200 mt-1">
-                                    Next Visit: {new Date(futureAppt.date).toLocaleDateString()} {futureAppt.notes && <span>({futureAppt.notes})</span>}
-                                  </p>
-                                </div>
-                              );
-                            }
-                            return null;
-                          })()}
+                         
                           {/* Vitals */}
                           {note.visit_notes_vitals && note.visit_notes_vitals[0] && (
                             <div className="mt-4 border-t pt-3">
@@ -1700,53 +1832,63 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
                               </div>
                             </div>
                           )}
-                          {/* Development Milestones */}
-                          {note.development_milestones && (
-                            <div className="mt-3">
-                              <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-200 flex items-center gap-2"><Check className="w-4 h-4 text-blue-400" />Developmental Milestones</h4>
-                              {(() => {
-                                // Group by domain using milestonesData
-                                const domains = ['cognitive', 'grossMotor', 'fineMotor', 'communicationSocial'];
-                                return domains.map(domain => {
-                                  const items = milestonesData.milestones.flatMap(mg => mg[domain] || []);
-                                  const domainEntries = Object.entries(note.development_milestones).filter(([key]) => key.startsWith(domain));
-                                  if (domainEntries.length === 0) return null;
-                                  return (
-                                    <div key={domain} className="mb-2">
-                                      <div className="font-semibold text-blue-600 dark:text-blue-300 text-xs mb-1 flex items-center gap-2">{domain.replace(/([A-Z])/g, ' $1')}</div>
-                                      <ul className="space-y-1">
-                                        {domainEntries.map(([key, value]) => (
-                                          <li key={key} className="flex items-center gap-2">
-                                            <span className={`inline-block w-4 h-4 rounded-full ${value.met ? 'bg-green-400' : 'bg-rose-400'}`}></span>
-                                            <span className="text-gray-800 dark:text-gray-200 text-xs">{(() => {
-                                              // Try to get the label from the milestone JSON
-                                              const idx = parseInt(key.split('-')[1], 10);
-                                              return items[idx] || key.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                                            })()}</span>
-                                            {!value.met && value.comment && (
-                                              <span className="ml-2 text-xs text-gray-500 dark:text-gray-300">Comment: {value.comment}</span>
-                                            )}
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  );
-                                });
-                              })()}
-                            </div>
-                          )}
-                          <button
-                            className="mt-2 px-4 py-1 rounded-full bg-blue-500 text-white font-semibold shadow hover:bg-blue-600 transition"
-                            onClick={() => handleSendTelegramNote(note)}
-                          >
-                            Send to Telegram
-                          </button>
+                          {/* Removed Send to Telegram and WhatsApp buttons */}
                           {note.ai_response && (
                             <div className="mt-3">
                               <h4 className="text-sm font-semibold text-blue-700 flex items-center gap-2">AI Assessment</h4>
                               <p className="text-gray-800 whitespace-pre-line bg-blue-50 rounded p-2 border border-blue-200 mt-1">{note.ai_response}</p>
                             </div>
                           )}
+                          {/* Inside the previous visit notes rendering, after vitals and before follow-up ... */}
+                          {(() => {
+                            // Always show all milestones for each domain
+                            const domains = ['cognitive', 'grossMotor', 'fineMotor', 'communicationSocial'];
+                            // Get the patient's age in months for age-appropriate milestones
+                            const ageMonths = patient.dob && note.visit_date ? getAgeInMonths(patient.dob, note.visit_date) : null;
+                            // Find the closest milestone group for the age
+                            const milestoneGroup = ageMonths !== null && milestonesData.milestones.length > 0
+                              ? milestonesData.milestones.reduce((closest, mg) => {
+                                  // Use ageRange string to get lower bound for comparison
+                                  const mgAge = parseInt((mg.ageRange || '').split('-')[0], 10);
+                                  if (!isNaN(mgAge) && mgAge <= ageMonths && (!closest || mgAge > parseInt((closest.ageRange || '').split('-')[0], 10))) {
+                                    return mg;
+                                  }
+                                  return closest;
+                                }, null)
+                              : milestonesData.milestones[0];
+                            return (
+                              <div className="mt-3">
+                                <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-200 flex items-center gap-2 mb-2"><Check className="w-4 h-4 text-blue-400" />Developmental Milestones</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  {domains.map(domain => {
+                                    const items = (milestoneGroup && milestoneGroup[domain]) || [];
+                                    return (
+                                      <div key={domain} className="bg-blue-50 dark:bg-gray-800 rounded-xl p-3 shadow-sm">
+                                        <div className="font-semibold text-blue-600 dark:text-blue-300 text-xs mb-2 flex items-center gap-2 uppercase tracking-wide">{domain.replace(/([A-Z])/g, ' $1')}</div>
+                                        <ul className="space-y-1">
+                                          {items.map((label, idx) => {
+                                            // Try to get the status from note.development_milestones, else default to met: true
+                                            const key = `${domain}-${idx}`;
+                                            const value = note.development_milestones && note.development_milestones[key] ? note.development_milestones[key] : { met: true, comment: '' };
+                                            return (
+                                              <li key={key} className="flex items-center gap-2 text-xs py-1">
+                                                <span className={`inline-block w-3 h-3 rounded-full ${value.met ? 'bg-green-400' : 'bg-rose-400'}`}></span>
+                                                <span className="text-gray-800 dark:text-gray-200 flex-1">{label}</span>
+                                                <span className={`ml-2 ${value.met ? 'text-green-700' : 'text-rose-700'}`}>{value.met ? 'Met' : 'Not met'}</span>
+                                                {!value.met && value.comment && (
+                                                  <span className="ml-2 text-gray-500 dark:text-gray-300">({value.comment})</span>
+                                                )}
+                                              </li>
+                                            );
+                                          })}
+                                        </ul>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     );
@@ -1781,6 +1923,7 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
               onClose={() => setShowAppointmentScheduler(false)}
               onAppointmentScheduled={(appointment) => {
                 setShowAppointmentScheduler(false);
+                setFollowUpDate(appointment.date); // <-- Set the follow-up date in your form state
                 setFollowUpConfirmation('Follow-up appointment scheduled successfully!');
                 setTimeout(() => setFollowUpConfirmation(''), 4000);
                 if (onAppointmentScheduled) onAppointmentScheduled(appointment);
@@ -1800,6 +1943,8 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
               alert('Email is not configured for this user');
               return;
             }
+            setEmailSuccess(null);
+            setEmailError(null);
             setShowEmailModal(true);
           }}
           title={patient.guardian_email ? 'Send email to guardian' : 'No guardian email available'}
@@ -1807,8 +1952,10 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
           <Mail className="w-5 h-5" />
           Send Email
         </button>
-        {/* ... other action buttons ... */}
+        
       </div>
+      {whatsappError && <div className="text-red-600 mb-2">{whatsappError}</div>}
+      {whatsappSuccess && <div className="text-green-600 mb-2">{whatsappSuccess}</div>}
       {/* Email Modal */}
       {showEmailModal && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
@@ -1835,10 +1982,6 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
             <div className="mb-4">
               <label className="block font-medium mb-2">Email Subject:</label>
               <input type="text" className="w-full border rounded px-3 py-2" value={emailSubject} onChange={e => setEmailSubject(e.target.value)} />
-            </div>
-            <div className="mb-4">
-              <label className="block font-medium mb-2">Email Content (HTML):</label>
-              <textarea className="w-full border rounded px-3 py-2 min-h-[120px] font-mono" value={emailContent} onChange={e => setEmailContent(e.target.value)} />
             </div>
             {emailError && <div className="text-red-600 mb-2">{emailError}</div>}
             {emailSuccess && <div className="text-green-600 mb-2">{emailSuccess}</div>}

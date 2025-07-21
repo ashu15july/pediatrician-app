@@ -15,7 +15,6 @@ export default function ForgotPasswordPage() {
     setLoading(true);
     
     try {
-      console.log('Sending password reset request for email:', email);
       
       // Use the correct API base URL based on current port
       const apiBase = window.location.port === '3001' 
@@ -31,11 +30,7 @@ export default function ForgotPasswordPage() {
         body: JSON.stringify({ email })
       });
       
-      console.log('Response status:', res.status);
-      console.log('Response headers:', res.headers);
-      
       const responseData = await res.json();
-      console.log('Response data:', responseData);
       
       setLoading(false);
       

@@ -15,7 +15,13 @@ export default async function handler(req, res) {
   }
 
   const prompt = `
-Clinical Context (no identifiers):\n${JSON.stringify(clinical_context, null, 2)}\n\n1. Provide a brief AI-generated summary/assessment of the case.\n2. Suggest 3-5 follow-up questions the doctor can ask the patient.\n3. Based on the context, suggest possible solutions or next steps for the doctor.\nFormat your response as:\n{\n  "ai_notes": "...",\n  "questions": ["...", "..."],\n  "suggestions": ["...", "..."]\n}\n`;
+You are an expert pediatrician. Given the following patient details, vitals, development milestones, chief complaint, and physical exam, assess the case and return:
+- A likely diagnosis (or differential diagnoses)
+- A suggested treatment plan
+- Any follow-up questions the doctor should consider
+- Advice or counselling for the case
+
+Patient details (no identifiers):\n${JSON.stringify(clinical_context, null, 2)}\n\nRespond ONLY with valid JSON and nothing else. Do not include any explanation or extra text. Format your response as:\n{\n  "diagnosis": "...",\n  "treatment_plan": "...",\n  "follow_up_questions": ["...", "..."],\n  "advice_counselling": "..."\n}\n`;
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -33,6 +39,10 @@ Clinical Context (no identifiers):\n${JSON.stringify(clinical_context, null, 2)}
     });
     const data = await response.json();
     console.log('OpenAI API response:', data);
+    // Log the raw message content for debugging
+    if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+      console.log('OpenAI raw content:', data.choices[0].message.content);
+    }
 
     if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
       return res.status(500).json({
@@ -46,7 +56,7 @@ Clinical Context (no identifiers):\n${JSON.stringify(clinical_context, null, 2)}
     try {
       aiResult = JSON.parse(data.choices[0].message.content);
     } catch (e) {
-      aiResult = { ai_notes: data.choices[0].message.content, questions: [], suggestions: [] };
+      aiResult = { diagnosis: data.choices[0].message.content, treatment_plan: '', follow_up_questions: [], advice_counselling: '' };
     }
     res.status(200).json(aiResult);
   } catch (err) {

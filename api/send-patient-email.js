@@ -398,54 +398,71 @@ function drawVisitNoteCard(doc, note, patient, clinic, index, x = 40, y = doc.y,
     doc.fontSize(12).fillColor(colors.primary).font('Helvetica-Bold');
     doc.text('Developmental Milestones', x + 20, milestoneSectionY);
     milestoneSectionY += 20;
+    const tableColWidths = [180, 80, 200]; // Milestone, Status, Comment
+    const tableRowHeight = 18;
+    const tableHeaderHeight = 20;
+    const tableMargin = 10;
     domains.forEach(domain => {
-      // Get all milestone keys for this domain
+      // Only show milestones present in the visit note for this domain
       const domainEntries = Object.entries(note.development_milestones).filter(([key]) => key.startsWith(domain));
       if (domainEntries.length === 0) return;
-      // Get all possible labels for this domain
-      const items = milestonesData.milestones.flatMap(mg => mg[domain] || []);
-      doc.fontSize(11).fillColor(colors.medium).font('Helvetica-Bold');
-      doc.text(domain.replace(/([A-Z])/g, ' $1'), x + 35, doc.y + 2);
-      doc.moveDown(0.5);
       // Table header
-      const labelColX = x + 60;
-      const statusColX = x + 320;
-      const commentColX = x + 390;
-      const rowStartY = doc.y;
+      let yRow = doc.y + tableMargin;
+      // Check for page break before drawing domain header
+      if (yRow + tableHeaderHeight + tableRowHeight * domainEntries.length > doc.page.height - 60) {
+        doc.addPage();
+        drawHeader(doc, clinic, patient);
+        yRow = 60;
+      }
+      doc.fontSize(11).fillColor(colors.medium).font('Helvetica-Bold');
+      doc.text(domain.replace(/([A-Z])/g, ' $1'), x + 35, yRow);
+      yRow += tableHeaderHeight;
+      // Draw table header row
       doc.fontSize(9).fillColor(colors.medium).font('Helvetica-Bold');
-      doc.text('Milestone', labelColX, rowStartY, { width: statusColX - labelColX - 5 });
-      doc.text('Status', statusColX, rowStartY, { width: commentColX - statusColX - 5 });
-      doc.text('Comment', commentColX, rowStartY, { width: width - (commentColX - x) - 20 });
-      let yRow = rowStartY + 14;
-      domainEntries.forEach(([key, value]) => {
-        const idx = parseInt(key.split('-')[1], 10);
-        const label = items[idx] || key.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        // Calculate heights for each cell
-        doc.fontSize(10).font('Helvetica');
-        const labelHeight = doc.heightOfString(label, { width: statusColX - labelColX - 5 });
-        doc.fontSize(10).font('Helvetica-Bold');
-        const statusText = value.met ? 'Met' : 'Not met';
-        const statusHeight = doc.heightOfString(statusText, { width: commentColX - statusColX - 5 });
-        doc.fontSize(9).font('Helvetica-Oblique');
-        const commentText = (!value.met && value.comment) ? value.comment : '';
-        const commentHeight = doc.heightOfString(commentText, { width: width - (commentColX - x) - 20 });
-        const rowHeight = Math.max(labelHeight, statusHeight, commentHeight, 14);
-        // Status dot
-        doc.save();
-        doc.circle(x + 50, yRow + rowHeight / 2 - 2, 4).fill(value.met ? colors.success : colors.error);
-        doc.restore();
-        // Label
+      doc.rect(x + 60, yRow, tableColWidths[0], tableRowHeight).fill('#f3f4f6');
+      doc.rect(x + 60 + tableColWidths[0], yRow, tableColWidths[1], tableRowHeight).fill('#f3f4f6');
+      doc.rect(x + 60 + tableColWidths[0] + tableColWidths[1], yRow, tableColWidths[2], tableRowHeight).fill('#f3f4f6');
+      doc.fillColor('#374151');
+      doc.text('Milestone', x + 65, yRow + 4, { width: tableColWidths[0] - 10 });
+      doc.text('Status', x + 65 + tableColWidths[0], yRow + 4, { width: tableColWidths[1] - 10 });
+      doc.text('Comment', x + 65 + tableColWidths[0] + tableColWidths[1], yRow + 4, { width: tableColWidths[2] - 10 });
+      yRow += tableRowHeight;
+      // Draw each milestone row (only those present in visit note, both met and not met)
+      domainEntries.forEach(([key, value], idx) => {
+        // Check for page break before drawing each row
+        if (yRow + tableRowHeight > doc.page.height - 60) {
+          doc.addPage();
+          drawHeader(doc, clinic, patient);
+          yRow = 60;
+        }
+        // Try to get the label from milestonesData if possible
+        let label = key;
+        const match = key.match(/^(.*)-(\d+)$/);
+        if (match) {
+          const domainKey = match[1];
+          const index = parseInt(match[2], 10);
+          const items = milestonesData.milestones.flatMap(mg => mg[domainKey] || []);
+          if (items[index]) label = items[index];
+        }
+        // Row background
+        if (idx % 2 === 0) {
+          doc.rect(x + 60, yRow, tableColWidths[0] + tableColWidths[1] + tableColWidths[2], tableRowHeight).fill('#ffffff');
+        } else {
+          doc.rect(x + 60, yRow, tableColWidths[0] + tableColWidths[1] + tableColWidths[2], tableRowHeight).fill('#f9fafb');
+        }
+        // Milestone label
         doc.fontSize(10).fillColor(colors.dark).font('Helvetica');
-        doc.text(label, labelColX, yRow, { width: statusColX - labelColX - 5 });
-        // Status text
-        doc.fontSize(10).fillColor(value.met ? colors.success : colors.error).font('Helvetica-Bold');
-        doc.text(statusText, statusColX, yRow, { width: commentColX - statusColX - 5 });
+        doc.text(label, x + 65, yRow + 4, { width: tableColWidths[0] - 10 });
+        // Status
+        const statusText = value && typeof value.met !== 'undefined' ? (value.met ? 'Met' : 'Not met') : 'Met';
+        doc.fontSize(10).fillColor(value && value.met ? colors.success : colors.error).font('Helvetica-Bold');
+        doc.text(statusText, x + 65 + tableColWidths[0], yRow + 4, { width: tableColWidths[1] - 10 });
         // Comment
         doc.fontSize(9).fillColor(colors.medium).font('Helvetica-Oblique');
-        doc.text(commentText, commentColX, yRow, { width: width - (commentColX - x) - 20 });
-        yRow += rowHeight + 2;
+        doc.text(value && value.comment ? value.comment : '', x + 65 + tableColWidths[0] + tableColWidths[1], yRow + 4, { width: tableColWidths[2] - 10 });
+        yRow += tableRowHeight;
       });
-      doc.y = yRow + 4;
+      doc.y = yRow + tableMargin;
     });
     doc.moveDown(1);
   }
@@ -730,26 +747,23 @@ function streamToBuffer(stream) {
 }
 
 module.exports = async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const { patientId, email, subject, emailOption } = req.body;
-  if (!patientId || !email || !subject || !emailOption) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-
   try {
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    const { patientId, email, subject, emailOption } = req.body;
+    if (!patientId || !email || !subject || !emailOption) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
     // Test PDFKit functionality first
     try {
-      // console.log('Testing PDFKit functionality...');
       const testDoc = new PDFDocument();
       testDoc.text('Test PDF');
       testDoc.end();
       const testBuffer = await streamToBuffer(testDoc);
-      // console.log('PDFKit test successful, buffer size:', testBuffer.length);
     } catch (pdfTestError) {
-      // console.error('PDFKit test failed:', pdfTestError);
       return res.status(500).json({ 
         error: 'PDFKit library issue', 
         details: pdfTestError.message 
@@ -759,7 +773,7 @@ module.exports = async function handler(req, res) {
     // Optionally, verify patient exists and email matches guardian_email
     const { data: patient, error } = await supabase
       .from('patients')
-      .select('id, guardian_email, name')
+      .select('id, guardian_email, name, dob, gender, blood_group, address')
       .eq('id', patientId)
       .single();
     if (error || !patient) {
@@ -776,67 +790,142 @@ module.exports = async function handler(req, res) {
       notes: emailOption === 'notes' || emailOption === 'both',
       vaccination: emailOption === 'vaccination' || emailOption === 'both'
     };
-    // Generate PDF
+
+    // Pick the latest visit note (or empty object if none)
+    const visit = (reportData.visitNotes && reportData.visitNotes.length > 0) ? reportData.visitNotes[0] : {};
     let pdfBuffer;
     try {
-      // console.log('Starting PDF generation for patient:', patient.name);
-      // console.log('Patient ID:', patient.id);
-      // console.log('Visit notes count:', reportData.visitNotes?.length || 0);
-      // console.log('Vaccination count:', reportData.vaccinationRecords?.length || 0);
-      // console.log('Clinic:', reportData.clinic?.name || 'N/A');
-      
       // Validate required data
       if (!reportData.patient) {
         throw new Error('Patient data is missing');
       }
-      
       if (!reportData.visitNotes) {
-        // console.log('No visit notes found, setting to empty array');
         reportData.visitNotes = [];
       }
-      
       if (!reportData.vaccinationRecords) {
-        // console.log('No vaccination records found, setting to empty array');
         reportData.vaccinationRecords = [];
       }
-      
-      // console.log('Creating PDF document...');
       const pdfDoc = generatePatientPDF(reportData, options);
-      
-      // console.log('Converting PDF to buffer...');
       pdfBuffer = await streamToBuffer(pdfDoc);
-      
-      // console.log('PDF generated successfully, buffer size:', pdfBuffer.length);
-      
       if (!pdfBuffer || pdfBuffer.length === 0) {
         throw new Error('Generated PDF buffer is empty');
       }
-      
     } catch (err) {
-      // console.error('PDF generation error:', err);
-      // console.error('Error message:', err.message);
-      // console.error('Error stack:', err.stack);
-      
-      // Check if it's a dependency issue
-      if (err.message.includes('PDFDocument') || err.message.includes('require')) {
-        // console.error('Possible PDFKit dependency issue. Please check if pdfkit is installed.');
-      }
-      
-      return res.status(500).json({ 
-        error: 'PDF generation failed', 
+      console.error('PDF generation failed:', err);
+      return res.status(500).json({
+        error: 'PDF generation failed',
         details: err.message,
         stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
       });
     }
 
-    // Send email with PDF attachment
-    // console.log('Sending email to:', email, 'with subject:', subject);
-    const emailBody = `Hi,\n\nHere is your report. Please find the attached PDF.\n\nRegards,\nPediaCircle Team`;
-    const result = await emailService.sendEmail(
-      email,
-      subject,
-      emailBody,
-      [
+    // Generate a beautiful, concise HTML email body
+    const clinicName = reportData.clinic?.name || 'Your Clinic';
+    // Gender-based emoji and color
+    let babyEmoji = '👶🏻';
+    let babyBg = 'linear-gradient(135deg, #38bdf8 0%, #06b6d4 100%)'; // default blue/green
+    if (patient.gender && typeof patient.gender === 'string') {
+      const g = patient.gender.toLowerCase();
+      if (g.startsWith('m')) { // male, boy
+        babyEmoji = '👦🏻';
+        babyBg = 'linear-gradient(135deg, #38bdf8 0%, #06b6d4 100%)'; // blue/green
+      } else if (g.startsWith('f')) { // female, girl
+        babyEmoji = '👧🏻';
+        babyBg = 'linear-gradient(135deg, #f472b6 0%, #a78bfa 100%)'; // pink/purple
+      } else {
+        babyEmoji = '👶🏻';
+        babyBg = 'linear-gradient(135deg, #a7f3d0 0%, #fef08a 100%)'; // mint/yellow
+      }
+    }
+    const emojiCircleStyle = `width: 80px; height: 80px; background: ${babyBg}; border-radius: 50%; margin: 0 auto 16px; line-height: 80px; text-align: center; font-size: 44px; padding: 0; display: block;`;
+    let html;
+    if (emailOption === 'vaccination') {
+      html = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #38bdf8 0%, #06b6d4 100%); padding: 40px 20px;">
+        <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); overflow: hidden;">
+          <!-- Header -->
+          <div style="background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%); padding: 32px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.5px;">Vaccination Summary</h1>
+            <p style="color: #e0f2fe; margin: 8px 0 0 0; font-size: 16px;">${clinicName}</p>
+          </div>
+          <!-- Content -->
+          <div style="padding: 40px 32px;">
+            <div style="text-align: center; margin-bottom: 32px;">
+              <div style="${emojiCircleStyle}">${babyEmoji}</div>
+              <h2 style="color: #1f2937; margin: 0 0 8px 0; font-size: 24px; font-weight: 600;">${patient.name}</h2>
+              <p style="color: #6b7280; margin: 0; font-size: 16px;">Vaccination summary is ready</p>
+            </div>
+            <!-- Message -->
+            <div style="background: #f0f9ff; padding: 24px; border-radius: 12px; border: 1px solid #e0f2fe;">
+              <h3 style="color: #0e7490; margin: 0 0 12px 0; font-size: 18px; font-weight: 600;">💉 Vaccination Report Attached</h3>
+              <p style="color: #0e7490; margin: 0; font-size: 16px; line-height: 1.6;">
+                Your complete vaccination summary has been generated and attached to this email.<br/>
+                The PDF contains all vaccination records for the patient.
+              </p>
+            </div>
+          </div>
+          <!-- Footer -->
+          <div style="background: #f8fafc; padding: 24px 32px; text-align: center; border-top: 1px solid #e5e7eb;">
+            <p style="color: #6b7280; margin: 0; font-size: 14px;">
+              Generated by <strong style="color: #0ea5e9;">${clinicName}</strong> • 
+              For questions, contact your doctor
+            </p>
+          </div>
+        </div>
+      </div>
+      `;
+    } else {
+      html = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 20px;">
+        <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); overflow: hidden;">
+          <!-- Header -->
+          <div style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); padding: 32px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.5px;">Patient visit summary</h1>
+            <p style="color: #e0e7ff; margin: 8px 0 0 0; font-size: 16px;">${clinicName}</p>
+          </div>
+          <!-- Content -->
+          <div style="padding: 40px 32px;">
+            <div style="text-align: center; margin-bottom: 32px;">
+              <div style="${emojiCircleStyle}">${babyEmoji}</div>
+              <h2 style="color: #1f2937; margin: 0 0 8px 0; font-size: 24px; font-weight: 600;">${patient.name}</h2>
+              <p style="color: #6b7280; margin: 0; font-size: 16px;">Your visit summary is ready</p>
+            </div>
+            <!-- Message -->
+            <div style="background: #f0f9ff; padding: 24px; border-radius: 12px; border: 1px solid #e0f2fe;">
+              <h3 style="color: #0c4a6e; margin: 0 0 12px 0; font-size: 18px; font-weight: 600;">📋 Complete Report Attached</h3>
+              <p style="color: #0c4a6e; margin: 0; font-size: 16px; line-height: 1.6;">
+                Your complete visit summary has been generated and attached to this email. 
+                The PDF contains detailed visit notes, vitals, treatment plans, and vaccination records if any.
+              </p>
+            </div>
+          </div>
+          <!-- Footer -->
+          <div style="background: #f8fafc; padding: 24px 32px; text-align: center; border-top: 1px solid #e5e7eb;">
+            <p style="color: #6b7280; margin: 0; font-size: 14px;">
+              Generated by <strong style="color: #2563eb;">PediaCircle</strong> • 
+              For questions, contact your doctor
+            </p>
+          </div>
+        </div>
+      </div>
+      `;
+    }
+
+    // Log environment variables used for email
+    // console.log('SENDGRID_API_KEY set:', !!process.env.SENDGRID_API_KEY);
+    // console.log('SUPABASE_URL:', process.env.SUPABASE_URL);
+    // console.log('SUPABASE_SERVICE_ROLE_KEY set:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+    // Log patient and visit data
+    // console.log('Patient data:', JSON.stringify(patient, null, 2));
+    // console.log('Visit data:', JSON.stringify(visit, null, 2));
+
+    // Logging before sending email
+    const emailPayload = {
+      to: patient.guardian_email,
+      subject: subject || 'Patient Visit Summary',
+      html,
+      attachments: [
         {
           content: pdfBuffer.toString('base64'),
           filename: `Patient_Report_${patient.name.replace(/ /g, '_')}.pdf`,
@@ -844,14 +933,27 @@ module.exports = async function handler(req, res) {
           disposition: 'attachment',
         }
       ]
-    );
-    if (!result.success) {
-      // console.error('Failed to send email:', result.error);
-      return res.status(500).json({ error: result.error || 'Failed to send email' });
+    };
+    // console.log('Email payload:', JSON.stringify(emailPayload, null, 2));
+    try {
+      const result = await emailService.sendEmail(
+        patient.guardian_email,
+        subject || 'Patient Visit Summary',
+        html,
+        emailPayload.attachments
+      );
+      // console.log('Result from emailService.sendEmail:', result);
+      if (result && result.success === false) {
+        throw new Error(result.error || 'Unknown error from email service');
+      }
+      // console.log('Email sent successfully to:', patient.guardian_email);
+      return res.status(200).json({ success: true, message: 'Email sent successfully' });
+    } catch (error) {
+      console.error('Failed to send email:', error);
+      return res.status(500).json({ error: 'Failed to send email', details: error.message });
     }
-    // console.log('Email sent successfully to:', email);
-    return res.status(200).json({ success: true, message: 'Email sent successfully' });
   } catch (err) {
-    return res.status(500).json({ error: err.message || 'Internal server error' });
+    console.error('Top-level error in send-patient-email:', err);
+    res.status(500).json({ error: 'A server error occurred', details: err.message });
   }
-}; 
+}

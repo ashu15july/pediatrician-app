@@ -23,7 +23,6 @@ export default function VerifyOtpPage() {
     setLoading(true);
     
     try {
-      console.log('Verifying OTP for email:', email);
       
       // Use the correct API base URL based on current port
       const apiBase = window.location.port === '3001' 
@@ -39,10 +38,8 @@ export default function VerifyOtpPage() {
         body: JSON.stringify({ email, otp })
       });
       
-      console.log('Response status:', res.status);
       
       const responseData = await res.json();
-      console.log('Response data:', responseData);
       
       setLoading(false);
       

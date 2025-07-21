@@ -17,9 +17,28 @@ import VerifyOtpPage from './pages/VerifyOtpPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import CalendarSidebarPanel from './components/CalendarSidebarPanel';
 import LandingPage from './pages/LandingPage';
+import { IAP_SCHEDULE } from './components/VaccinationTable';
+import FeaturesPage from './pages/FeaturesPage';
+import PricingPage from './pages/PricingPage';
+import SecurityPage from './pages/SecurityPage';
+import ApiPage from './pages/ApiPage';
+import AboutPage from './pages/AboutPage';
+import BlogPage from './pages/BlogPage';
+import CareersPage from './pages/CareersPage';
+import ContactPage from './pages/ContactPage';
+import HelpCenterPage from './pages/HelpCenterPage';
+import DocumentationPage from './pages/DocumentationPage';
+import PrivacyPage from './pages/PrivacyPage';
+import TermsPage from './pages/TermsPage';
+import CookiesPage from './pages/CookiesPage';
 
 function ClinicAppContent() {
   const { currentUser: clinicUser, isLoggedIn: isClinicLoggedIn, loading: clinicLoading } = useClinicAuth();
+
+  // Only use clinic user
+  const activeUser = clinicUser;
+  const isActiveLoggedIn = isClinicLoggedIn;
+  const isLoading = clinicLoading;
   
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
@@ -33,11 +52,94 @@ function ClinicAppContent() {
   const [patients, setPatients] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [clinicSubdomain, setClinicSubdomain] = useState(null);
+  const [dueVaccinations, setDueVaccinations] = useState([]);
+  const [loadingVaccinations, setLoadingVaccinations] = useState(false);
+  const [statusFilter, setStatusFilter] = useState(null); // NEW: filter for appointment status
 
-  // Only use clinic user
-  const activeUser = clinicUser;
-  const isActiveLoggedIn = isClinicLoggedIn;
-  const isLoading = clinicLoading;
+  // Helper to calculate due date for a vaccine based on DOB and age requirement
+  function calculateDueDateFromDOB(dob, ageRequirement) {
+    if (!dob) return '';
+    const dateOfBirth = new Date(dob);
+    let dueDate = new Date(dateOfBirth);
+    if (ageRequirement === 'BIRTH') {
+      return dateOfBirth.toISOString().split('T')[0];
+    }
+    const match = ageRequirement.match(/(\d+)\s*(mo|weeks|yrs)/);
+    if (!match) return '';
+    const [_, number, unit] = match;
+    const num = parseInt(number);
+    switch (unit) {
+      case 'weeks':
+        dueDate.setDate(dateOfBirth.getDate() + (num * 7));
+        break;
+      case 'mo':
+        dueDate.setMonth(dateOfBirth.getMonth() + num);
+        break;
+      case 'yrs':
+        dueDate.setFullYear(dateOfBirth.getFullYear() + num);
+        break;
+      default:
+        return '';
+    }
+    return dueDate.toISOString().split('T')[0];
+  }
+
+  // Calculate due vaccinations for support/admin
+  useEffect(() => {
+    async function fetchAllDueVaccinations() {
+      if (activeUser?.role === 'support' || activeUser?.role === 'admin') {
+        if (!patients || patients.length === 0) {
+          // Do NOT reset dueVaccinations to [] if patients are not loaded yet
+          return;
+        }
+        setLoadingVaccinations(true);
+        // Fetch all vaccination records for all patients
+        const allPatientIds = patients.map(p => p.id);
+        let allVaccRecords = [];
+        if (allPatientIds.length > 0) {
+          const { data, error } = await supabase
+            .from('vaccinations')
+            .select('id, patient_id, vaccine, due_date, given_date');
+          if (!error && data) {
+            allVaccRecords = data;
+          }
+        }
+        const today = new Date();
+        const in7Days = new Date();
+        in7Days.setDate(today.getDate() + 7);
+        const dueList = [];
+        patients.forEach(patient => {
+          IAP_SCHEDULE.forEach(({ age, vaccines }) => {
+            vaccines.forEach(vaccine => {
+              const dueDateStr = calculateDueDateFromDOB(patient.dob, age);
+              if (!dueDateStr) return;
+              const dueDate = new Date(dueDateStr);
+              const dueDateYMD = dueDate.toISOString().split('T')[0];
+              const todayYMD = today.toISOString().split('T')[0];
+              const in7DaysYMD = in7Days.toISOString().split('T')[0];
+              if (dueDateYMD >= todayYMD && dueDateYMD <= in7DaysYMD) {
+                // Check if already given
+                const alreadyGiven = allVaccRecords.some(
+                  r => r.patient_id === patient.id && r.vaccine === vaccine && r.given_date
+                );
+                if (!alreadyGiven) {
+                  dueList.push({
+                    patient_id: patient.id,
+                    patient_name: patient.name,
+                    vaccine,
+                    due_date: dueDateStr,
+                  });
+                }
+              }
+            });
+          });
+        });
+        setDueVaccinations(dueList);
+        setLoadingVaccinations(false);
+      }
+    }
+    fetchAllDueVaccinations();
+  }, [patients, activeUser]);
 
   // Get clinic subdomain from localStorage or URL
   useEffect(() => {
@@ -206,7 +308,7 @@ function ClinicAppContent() {
                 <Calendar
                   selectedDate={selectedDate}
                   setSelectedDate={setSelectedDate}
-                  appointments={appointments}
+                  appointments={statusFilter ? appointments.filter(a => a.status === statusFilter) : appointments}
                   error={error}
                   onAppointmentScheduled={handleAppointmentScheduled}
                   onAppointmentDelete={handleAppointmentDelete}
@@ -215,6 +317,7 @@ function ClinicAppContent() {
                   currentUser={activeUser}
                   doctors={doctors}
                   onPatientAdded={loadPatients}
+                  statusFilter={statusFilter} // pass for possible UI highlight
                 />
               </div>
               {/* Sidebar: Appointment/Doctor Details */}
@@ -225,6 +328,10 @@ function ClinicAppContent() {
                   appointments={appointments}
                   patients={patients}
                   currentUser={activeUser}
+                  dueVaccinations={dueVaccinations}
+                  loadingVaccinations={loadingVaccinations}
+                  onStatusCardClick={setStatusFilter} // NEW: pass handler
+                  statusFilter={statusFilter} // NEW: pass current filter
                 />
               </div>
             </div>
@@ -265,6 +372,20 @@ function App() {
               <Route path="/clinic-login" element={<ClinicLoginPage />} />
               <Route path="/clinic-dashboard" element={<ClinicAppContent />} />
               <Route path="/dashboard" element={<ClinicAppContent />} />
+              {/* Marketing/Product Pages */}
+              <Route path="/features" element={<FeaturesPage />} />
+              <Route path="/pricing" element={<PricingPage />} />
+              <Route path="/security" element={<SecurityPage />} />
+              <Route path="/api" element={<ApiPage />} />
+              <Route path="/about" element={<AboutPage />} />
+              <Route path="/blog" element={<BlogPage />} />
+              <Route path="/careers" element={<CareersPage />} />
+              <Route path="/contact" element={<ContactPage />} />
+              <Route path="/helpcenter" element={<HelpCenterPage />} />
+              <Route path="/documentation" element={<DocumentationPage />} />
+              <Route path="/privacy" element={<PrivacyPage />} />
+              <Route path="/terms" element={<TermsPage />} />
+              <Route path="/cookies" element={<CookiesPage />} />
               {/* Root route - Show clinic login on subdomains or ?clinic= param, landing page otherwise */}
               <Route path="/" element={
                 subdomain ? <ClinicLoginPage /> : <LandingPage />

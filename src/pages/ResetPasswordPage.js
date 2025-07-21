@@ -35,7 +35,6 @@ export default function ResetPasswordPage() {
     setLoading(true);
     
     try {
-      console.log('Resetting password for email:', email);
       
       // Use the correct API base URL based on current port
       const apiBase = window.location.port === '3001' 
@@ -51,11 +50,6 @@ export default function ResetPasswordPage() {
         body: JSON.stringify({ email, token, newPassword: password })
       });
       
-      console.log('Response status:', res.status);
-      
-      const responseData = await res.json();
-      console.log('Response data:', responseData);
-      
       setLoading(false);
       
       if (res.ok) {
@@ -64,6 +58,7 @@ export default function ResetPasswordPage() {
           navigate('/clinic-login');
         }, 2000);
       } else {
+        const responseData = await res.json();
         const errorMessage = responseData.error?.message || responseData.error || 'Failed to reset password. Please try again.';
         setError(errorMessage);
       }

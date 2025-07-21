@@ -7,6 +7,17 @@ import { useClinic } from '../contexts/ClinicContext';
 import { getSubdomain } from '../utils/getSubdomain';
 import NewPatientForm from './NewPatientForm';
 
+async function sendWhatsAppMessage({ userId, clinicId, patientId, messageType, templateParams }) {
+  const res = await fetch('/api/send-whatsapp-message', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, clinicId, patientId, messageType, templateParams })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to send WhatsApp message');
+  return data;
+}
+
 const DateAppointmentScheduler = ({ 
   selectedDate, 
   onCancel,
@@ -44,6 +55,14 @@ const DateAppointmentScheduler = ({
   const [isDoctorDropdownOpen, setIsDoctorDropdownOpen] = useState(false);
   const [highlightedPatientIndex, setHighlightedPatientIndex] = useState(-1);
   const [highlightedDoctorIndex, setHighlightedDoctorIndex] = useState(-1);
+  // Add a state for temperature in Fahrenheit for the form
+  const [temperatureF, setTemperatureF] = useState('');
+  // Add state for all vitals
+  const [height, setHeight] = useState('');
+  const [weight, setWeight] = useState('');
+  const [heartRate, setHeartRate] = useState('');
+  const [bloodPressure, setBloodPressure] = useState('');
+  const [headCircumference, setHeadCircumference] = useState('');
 
   // Use props directly
   const patients = propPatients || [];
@@ -59,11 +78,30 @@ const DateAppointmentScheduler = ({
   useEffect(() => {
     // If editing an existing appointment, populate the form
     if (existingAppointment) {
-      setSelectedPatient(existingAppointment.patients);
-      setSelectedDoctor(existingAppointment.doctor_id);
-      setAppointmentType(existingAppointment.type);
-      setTimeSlot(existingAppointment.time);
+      // Patient: use .patient if present, else find by patient_id
+      let patientObj = existingAppointment.patient || patients.find(p => p.id === existingAppointment.patient_id);
+      setSelectedPatient(patientObj || null);
+      setPatientSearchTerm(patientObj ? patientObj.name : '');
+      // Doctor: use user_id or doctor_id
+      const docId = existingAppointment.user_id || existingAppointment.doctor_id;
+      setSelectedDoctor(docId || '');
+      const doctorObj = doctors.find(d => d.id === docId);
+      setDoctorSearchTerm(doctorObj ? doctorObj.full_name : '');
+      setAppointmentType(existingAppointment.type || 'checkup');
+      setTimeSlot(existingAppointment.time || '');
       setNotes(existingAppointment.notes || '');
+      // Prefill temperature in Fahrenheit if available
+      if (existingAppointment.temperature !== undefined && existingAppointment.temperature !== null) {
+        // If temperature is in Celsius, convert to Fahrenheit
+        const tempC = parseFloat(existingAppointment.temperature);
+        if (!isNaN(tempC)) {
+          setTemperatureF(((tempC * 9/5) + 32).toFixed(1));
+        } else {
+          setTemperatureF('');
+        }
+      } else {
+        setTemperatureF('');
+      }
     } else if (activeUser && activeUser.role === 'doctor' && !selectedDoctor) {
       // If user is a doctor and not editing, pre-select themselves
       const doctorRecord = (doctors || []).find(d => d.user_id === activeUser.id);
@@ -72,7 +110,7 @@ const DateAppointmentScheduler = ({
         setDoctorSearchTerm(doctorRecord.full_name);
       }
     }
-  }, [existingAppointment, propPatients, propDoctors, activeUser, doctors]);
+  }, [existingAppointment, patients, doctors, activeUser, selectedDoctor]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -85,6 +123,15 @@ const DateAppointmentScheduler = ({
       if (!selectedDoctor) throw new Error('Please select a doctor');
       if (!timeSlot) throw new Error('Please select a time slot');
       if (!appointmentType) throw new Error('Please select an appointment type');
+
+      // Convert temperatureF to Celsius for saving
+      let temperatureC = null;
+      if (temperatureF) {
+        const tempF = parseFloat(temperatureF);
+        if (!isNaN(tempF)) {
+          temperatureC = ((tempF - 32) * 5/9).toFixed(1);
+        }
+      }
 
       // Check for existing appointments at the same time
       const { data: existingAppointments, error: checkError } = await supabase
@@ -110,8 +157,6 @@ const DateAppointmentScheduler = ({
         ? selectedDate.toLocaleDateString('en-CA') // en-CA format is YYYY-MM-DD
         : selectedDate;
 
-      console.log('DateAppointmentScheduler: Submitting appointment with date:', appointmentDateString);
-
       const appointmentData = {
         patient_id: selectedPatient.id,
         user_id: selectedDoctor,
@@ -124,6 +169,7 @@ const DateAppointmentScheduler = ({
       };
 
       let result;
+      let appointmentId;
       if (existingAppointment) {
         // Update existing appointment
         const { data, error: updateError } = await supabase
@@ -132,8 +178,12 @@ const DateAppointmentScheduler = ({
           .eq('id', existingAppointment.id)
           .select()
           .single();
-        if (updateError) throw updateError;
+        if (updateError) {
+          console.error('[handleSubmit] Error updating appointment:', updateError);
+          throw updateError;
+        }
         result = data;
+        appointmentId = existingAppointment.id;
       } else {
         // Create new appointment directly
         const { data, error: insertError } = await supabase
@@ -141,12 +191,60 @@ const DateAppointmentScheduler = ({
           .insert([appointmentData])
           .select()
           .single();
-        if (insertError) throw insertError;
+        if (insertError) {
+          console.error('[handleSubmit] Error creating appointment:', insertError);
+          throw insertError;
+        }
         result = data;
+        appointmentId = data.id;
+      }
+
+      // Save vitals if any are entered (for support users editing scheduled appt)
+      if (isSupportUser && isEditingScheduled && appointmentId && (
+        height || weight || temperatureF || heartRate || bloodPressure || headCircumference || notes
+      )) {
+        const vitalsData = {
+          patient_id: selectedPatient.id,
+          appointment_id: appointmentId,
+          recorded_by: activeUser.id,
+          clinic_id: clinic.id,
+          recorded_at: new Date().toISOString(),
+          height: height ? parseFloat(height) : null,
+          weight: weight ? parseFloat(weight) : null,
+          temperature: temperatureC ? parseFloat(temperatureC) : null,
+          heart_rate: heartRate ? parseInt(heartRate) : null,
+          blood_pressure: bloodPressure || null,
+          head_circumference: headCircumference ? parseFloat(headCircumference) : null,
+          notes: notes || null
+        };
+        // Upsert (insert or update) vitals for this appointment
+        await supabase
+          .from('patient_vitals')
+          .upsert([vitalsData], { onConflict: ['appointment_id'] });
       }
 
       onAppointmentScheduled(result);
       onCancel();
+
+      try {
+        await sendWhatsAppMessage({
+          userId: activeUser.id,
+          clinicId: clinic.id,
+          patientId: selectedPatient.id,
+          messageType: 'appointment_booking_confirm', // Use your actual template name
+          templateParams: [
+            selectedPatient.name, // {{1}} Patient's Name
+            clinic.name,          // {{2}} Healthcare Facility
+            `${appointmentDateString} at ${timeSlot}`, // {{3}} Date & Time details
+            clinic.name           // {{4}} Healthcare Facility (again)
+          ]
+        });
+        // Optionally show a toast/alert: "WhatsApp confirmation sent!"
+      } catch (err) {
+        // Optionally show a toast/alert: "Failed to send WhatsApp message"
+        console.error('WhatsApp message error:', err);
+      }
+
     } catch (err) {
       console.error('Error saving appointment:', err);
       setError(err.message || 'Failed to save appointment');
@@ -426,32 +524,41 @@ const DateAppointmentScheduler = ({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs text-gray-600">Height (cm)</label>
-              <input type="number" min="40" max="200" step="0.1" className="w-full px-3 py-2 rounded-lg border border-blue-200" />
+              <input type="number" min="40" max="200" step="0.1" value={height} onChange={e => setHeight(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-blue-200" />
               <div className="text-xs text-gray-400">Range: 40-200 cm</div>
             </div>
             <div>
               <label className="block text-xs text-gray-600">Weight (kg)</label>
-              <input type="number" min="2" max="200" step="0.1" className="w-full px-3 py-2 rounded-lg border border-blue-200" />
+              <input type="number" min="2" max="200" step="0.1" value={weight} onChange={e => setWeight(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-blue-200" />
               <div className="text-xs text-gray-400">Range: 2-200 kg</div>
             </div>
             <div>
-              <label className="block text-xs text-gray-600">Temperature (°C)</label>
-              <input type="number" min="35" max="42" step="0.1" className="w-full px-3 py-2 rounded-lg border border-blue-200" />
-              <div className="text-xs text-gray-400">Range: 35-42°C</div>
+              <label className="block text-xs text-gray-600">Temperature (°F)</label>
+              <input
+                type="number"
+                min="97"
+                max="100.4"
+                step="0.1"
+                value={temperatureF}
+                onChange={e => setTemperatureF(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-blue-200"
+                placeholder="Temperature (°F)"
+              />
+              <div className="text-xs text-gray-400">Range: 97-100.4 °F</div>
             </div>
             <div>
               <label className="block text-xs text-gray-600">Heart Rate (bpm)</label>
-              <input type="number" min="40" max="200" step="1" className="w-full px-3 py-2 rounded-lg border border-blue-200" />
+              <input type="number" min="40" max="200" step="1" value={heartRate} onChange={e => setHeartRate(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-blue-200" />
               <div className="text-xs text-gray-400">Range: 40-200 bpm</div>
             </div>
             <div>
               <label className="block text-xs text-gray-600">Blood Pressure (mmHg)</label>
-              <input type="text" pattern="\d{2,3}/\d{2,3}" className="w-full px-3 py-2 rounded-lg border border-blue-200" />
+              <input type="text" pattern="\d{2,3}/\d{2,3}" value={bloodPressure} onChange={e => setBloodPressure(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-blue-200" />
               <div className="text-xs text-gray-400">Range: 60-180 mmHg (e.g., 120/80)</div>
             </div>
             <div>
               <label className="block text-xs text-gray-600">Head Circumference (cm)</label>
-              <input type="number" min="30" max="60" step="0.1" className="w-full px-3 py-2 rounded-lg border border-blue-200" />
+              <input type="number" min="30" max="60" step="0.1" value={headCircumference} onChange={e => setHeadCircumference(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-blue-200" />
               <div className="text-xs text-gray-400">Range: 30-60 cm</div>
             </div>
           </div>

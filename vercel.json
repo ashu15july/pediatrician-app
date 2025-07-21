@@ -1,0 +1,8 @@
+{
+  "cron": [
+    {
+      "path": "/api/vaccination-reminder-cron",
+      "schedule": "0 6 * * *"
+    }
+  ]
+} 

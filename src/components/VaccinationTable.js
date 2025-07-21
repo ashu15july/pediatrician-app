@@ -5,7 +5,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Check } from 'lucide-react';
 
-const IAP_SCHEDULE = [
+export const IAP_SCHEDULE = [
   { age: 'BIRTH', vaccines: ['BCG', 'OPV (0)', 'Hepatitis B (1)'] },
   { age: '6 weeks', vaccines: ['Hepatitis B (2)', 'DTPw / DTaP (1)', 'HIB (1)', 'IPV (1)', 'Pneumococcal - PCV (1)', 'Rotavirus (1)'] },
   { age: '10 weeks', vaccines: ['DTPw / DTaP (2)', 'HIB (2)', 'IPV (2)', 'Pneumococcal - PCV (2)', 'Rotavirus (2)'] },
