@@ -29,13 +29,10 @@ export default function VerifyOtpPage() {
         ? 'http://localhost:3001/api'
         : '/api';
       
-      const res = await fetch(`${apiBase}/verify-otp`, {
+      const res = await fetch(`${apiBase}/auth`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ email, otp })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'verify-otp', email, otp })
       });
       
       

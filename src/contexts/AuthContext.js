@@ -55,56 +55,51 @@ export function useAuth() {
 }
 
 export function AuthProvider({ children }) {
-  const [currentUser, setCurrentUser] = useState(null);
+  const [user, setUser] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // Check if there's a stored user in localStorage
     const storedUser = localStorage.getItem('currentUser');
     if (storedUser) {
-      setCurrentUser(JSON.parse(storedUser));
+      setUser(JSON.parse(storedUser));
+      setIsLoggedIn(true);
     }
     setLoading(false);
   }, []);
 
   const login = async (username, password) => {
+    setLoading(true);
+    setError(null);
     try {
-      console.log('Starting login process for username:', username);
-      
-      // Find user in our mock users array
-      const user = users.find(u => u.username === username && u.password === password);
-      
-      if (!user) {
-        throw new Error('Invalid username or password');
-      }
-
-      // Create a user object with the necessary information
-      const userData = {
-        id: user.id, // Use the predefined UUID
-        username: user.username,
-        role: user.role,
-        user_metadata: { role: user.role }
-      };
-
-      // Store the user in localStorage
-      localStorage.setItem('currentUser', JSON.stringify(userData));
-      
-      console.log('Login successful:', userData);
-      setCurrentUser(userData);
-      return userData;
-    } catch (error) {
-      console.error('Login error details:', {
-        message: error.message,
-        name: error.name
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'login', email: username, password })
       });
-      throw error;
+      const userData = await res.json();
+      if (!res.ok || !userData.success) {
+        throw new Error(userData.error || 'Login failed');
+      }
+      setUser(userData.user);
+      setIsLoggedIn(true);
+      setError(null);
+      return { success: true };
+    } catch (err) {
+      setError(err.message || 'Login failed');
+      return { success: false, error: err.message };
+    } finally {
+      setLoading(false);
     }
   };
 
   const logout = async () => {
     try {
       localStorage.removeItem('currentUser');
-      setCurrentUser(null);
+      setUser(null);
+      setIsLoggedIn(false);
     } catch (error) {
       console.error('Logout error details:', error);
       throw error;
@@ -112,13 +107,13 @@ export function AuthProvider({ children }) {
   };
 
   const hasPermission = (permission) => {
-    const userRole = currentUser?.role;
+    const userRole = user?.role;
     return userRoles[userRole]?.permissions.includes(permission) ?? false;
   };
 
   const value = {
-    currentUser,
-    isLoggedIn: !!currentUser,
+    user,
+    isLoggedIn,
     login,
     logout,
     loading,

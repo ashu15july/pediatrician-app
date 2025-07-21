@@ -9,6 +9,9 @@ export function useSuperAdminAuth() {
 export function SuperAdminAuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     // Check if there's a stored super admin user in localStorage
@@ -21,27 +24,27 @@ export function SuperAdminAuthProvider({ children }) {
   }, []);
 
   const login = async (username, password) => {
+    setLoading(true);
+    setError(null);
     try {
-      // Call the new login API
-      const apiBase = window.location.port === '3001' ? 'http://localhost:3001/api' : '/api';
-      const res = await fetch(`${apiBase}/login`, {
+      const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: username, password })
+        body: JSON.stringify({ action: 'login', email: username, password })
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Invalid credentials');
+      const userData = await res.json();
+      if (!res.ok || !userData.success) {
+        throw new Error(userData.error || 'Login failed');
       }
-      if (data.user.role !== 'super_admin') {
-        throw new Error('Not a super admin');
-      }
-      localStorage.setItem('superAdminUser', JSON.stringify(data.user));
-      setCurrentUser(data.user);
-      return data.user;
-    } catch (error) {
-      console.error('Super admin login error:', error);
-      throw error;
+      setUser(userData.user);
+      setIsLoggedIn(true);
+      setError(null);
+      return { success: true };
+    } catch (err) {
+      setError(err.message || 'Login failed');
+      return { success: false, error: err.message };
+    } finally {
+      setLoading(false);
     }
   };
 

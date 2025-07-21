@@ -69,10 +69,11 @@ const BillModal = ({ appointment, patient, doctor, clinic, onClose, bill: initia
     setSaveSuccess(null);
     setSaveError(null);
     try {
-      const res = await fetch('/api/save-bill', {
+      const res = await fetch('/api/bill', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'save',
           appointmentId: appointment.id,
           patientId: patientInfo.id,
           doctorId: doctorInfo.id,
@@ -99,10 +100,11 @@ const BillModal = ({ appointment, patient, doctor, clinic, onClose, bill: initia
     setSaveSuccess(null);
     setSaveError(null);
     try {
-      const res = await fetch('/api/save-bill', {
+      const res = await fetch('/api/bill', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'save',
           billId,
           markPaid: true,
           payment_method: paymentMethod,
@@ -127,10 +129,14 @@ const BillModal = ({ appointment, patient, doctor, clinic, onClose, bill: initia
     setEmailSuccess(null);
     setEmailError(null);
     try {
-      const res = await fetch('/api/send-bill-email', {
+      const res = await fetch('/api/bill', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ billId, email: patientInfo.email || patientInfo.guardian_email })
+        body: JSON.stringify({
+          action: 'send-email',
+          billId,
+          email: patientInfo.email || patientInfo.guardian_email
+        })
       });
       const data = await res.json();
       if (!res.ok || !data.success) {

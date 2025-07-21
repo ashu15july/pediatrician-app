@@ -21,13 +21,10 @@ export default function ForgotPasswordPage() {
         ? 'http://localhost:3001/api'
         : '/api';
       
-      const res = await fetch(`${apiBase}/request-password-reset`, {
+      const res = await fetch(`${apiBase}/auth`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ email })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'request-password-reset', email })
       });
       
       const responseData = await res.json();

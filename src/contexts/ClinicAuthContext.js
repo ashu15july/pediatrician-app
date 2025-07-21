@@ -28,6 +28,8 @@ export function ClinicAuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentClinic, setCurrentClinic] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     // Get subdomain and determine clinic
@@ -42,6 +44,7 @@ export function ClinicAuthProvider({ children }) {
     if (storedUser) {
       const user = JSON.parse(storedUser);
       setCurrentUser(user);
+      setIsLoggedIn(true);
       // Set the user email in database session for RLS policies
       setUserEmailInSession(user.email);
     }
@@ -82,26 +85,32 @@ export function ClinicAuthProvider({ children }) {
   };
 
   const login = async (username, password) => {
+    setLoading(true);
+    setError(null);
     try {
-      // Call the new login API
-      const apiBase = window.location.port === '3001' ? 'http://localhost:3001/api' : '/api';
-      const res = await fetch(`${apiBase}/login`, {
+      const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: username, password })
+        body: JSON.stringify({ action: 'login', email: username, password })
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Invalid credentials');
+      const userData = await res.json();
+      if (!res.ok || !userData.success) {
+        throw new Error(userData.error || 'Login failed');
       }
-      // Optionally, check clinic_id matches current subdomain's clinic
-      // (You can add extra checks here if needed)
-      localStorage.setItem('clinicUser', JSON.stringify(data.user));
-      setCurrentUser(data.user);
-      return data.user;
-    } catch (error) {
-      console.error('Clinic user login error:', error);
-      throw error;
+      setCurrentUser(userData.user);
+      setIsLoggedIn(true);
+      setError(null);
+      // Store user in localStorage
+      localStorage.setItem('clinicUser', JSON.stringify(userData.user));
+      // Set email in session for RLS
+      await setUserEmailInSession(userData.user.email);
+      return { success: true };
+    } catch (err) {
+      setError(err.message || 'Login failed');
+      setIsLoggedIn(false);
+      return { success: false, error: err.message };
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -109,6 +118,7 @@ export function ClinicAuthProvider({ children }) {
     localStorage.removeItem('clinicUser');
     localStorage.removeItem('currentClinicSubdomain');
     setCurrentUser(null);
+    setIsLoggedIn(false);
     // Clear the session email - handle the RPC call properly
     try {
       supabase.rpc('clear_user_email_session').then(() => {
@@ -129,7 +139,7 @@ export function ClinicAuthProvider({ children }) {
   const value = {
     currentUser,
     currentClinic,
-    isLoggedIn: !!currentUser,
+    isLoggedIn,
     login,
     logout,
     loading,
