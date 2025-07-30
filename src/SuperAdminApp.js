@@ -231,7 +231,7 @@ const SuperAdminApp = () => {
               <WhatsAppConfigForm 
                 clinicId={selectedClinic.id}
                 onSuccess={(clinic) => {
-                  console.log('WhatsApp configured successfully for:', clinic.name);
+                  // WhatsApp configured successfully
                 }}
               />
             </div>

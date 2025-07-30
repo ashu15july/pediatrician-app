@@ -9,7 +9,7 @@ async function loadClinicBots() {
     if (!bots[row.id]) {
       bots[row.id] = new TelegramBot(row.telegram_bot_token, { polling: true });
       // You can add event handlers here for each bot if needed
-      console.log(`Loaded bot for clinic ${row.id}`);
+              // Loaded bot for clinic
     }
   });
 }

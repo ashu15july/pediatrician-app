@@ -5,14 +5,56 @@ import { useClinicAuth } from '../contexts/ClinicAuthContext';
 import { ClinicProvider, useClinic } from '../contexts/ClinicContext';
 
 const MainLayout = ({ children, currentView, setCurrentView, currentUser }) => {
-  const { currentUser: authUser, logout: authLogout, hasPermission: authHasPermission } = useAuth();
+  const { currentUser: authUser, hasPermission: authHasPermission } = useAuth();
   const { currentUser: clinicUser, logout: clinicLogout, hasPermission: clinicHasPermission } = useClinicAuth();
   const { clinic, loading, error } = useClinic();
   
   // Determine which user is active and which logout function to use
   const activeUser = clinicUser || authUser;
-  const logout = clinicUser ? clinicLogout : authLogout;
   const hasPermission = clinicUser ? clinicHasPermission : authHasPermission;
+  
+    // Create a custom logout function that handles clinic subdomain
+  const logout = () => {
+    if (clinicUser) {
+      // Use clinic logout which already has clinic subdomain access
+      clinicLogout();
+    } else {
+      // For auth users (doctors/support), we need to handle clinic subdomain manually
+      const subdomain = clinic?.subdomain || 
+                       localStorage.getItem('currentClinicSubdomain') ||
+                       (() => {
+                         const hostname = window.location.hostname;
+                         if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                           const urlParams = new URLSearchParams(window.location.search);
+                           return urlParams.get('clinic');
+                         }
+                         const parts = hostname.split('.');
+                         return parts.length > 2 && parts[0] !== 'www' ? parts[0] : null;
+                       })();
+      
+      // Clear user data
+      localStorage.removeItem('currentUser');
+      
+      // Redirect to clinic page
+      if (subdomain) {
+        if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+          const redirectUrl = `https://${subdomain}.${window.location.hostname.replace(/^[^.]+\./, '')}`;
+          setTimeout(() => {
+            window.location.replace(redirectUrl);
+          }, 100);
+        } else {
+          const redirectUrl = `/?clinic=${subdomain}`;
+          setTimeout(() => {
+            window.location.replace(redirectUrl);
+          }, 100);
+        }
+      } else {
+        setTimeout(() => {
+          window.location.replace('/');
+        }, 100);
+      }
+    }
+  };
   
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {

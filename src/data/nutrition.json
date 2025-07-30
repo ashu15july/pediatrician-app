@@ -1,0 +1,130 @@
+{
+    "nutritionFeedingChart": [
+      {
+        "ageMonths": 0,
+        "feedingType": "Exclusive Breastfeeding",
+        "dailyMeals": null,
+        "recommendedFoods": [],
+        "notes": "Initiate breastfeeding within the first hour of birth. Breastfeed on demand, typically 8-12 times per day. No water, formula, or other foods."
+      },
+      {
+        "ageMonths": 1,
+        "feedingType": "Exclusive Breastfeeding",
+        "dailyMeals": null,
+        "recommendedFoods": [],
+        "notes": "Continue breastfeeding on demand. Ensure proper latch and adequate milk supply. Consult a lactation specialist if needed."
+      },
+      {
+        "ageMonths": 2,
+        "feedingType": "Exclusive Breastfeeding",
+        "dailyMeals": null,
+        "recommendedFoods": [],
+        "notes": "Breastfeed 8-12 times daily. Monitor weight gain and wet diapers (6-8 per day) to ensure adequate nutrition."
+      },
+      {
+        "ageMonths": 3,
+        "feedingType": "Exclusive Breastfeeding",
+        "dailyMeals": null,
+        "recommendedFoods": [],
+        "notes": "Maintain exclusive breastfeeding. Vitamin D supplements (400 IU daily) may be recommended by pediatricians."
+      },
+      {
+        "ageMonths": 4,
+        "feedingType": "Exclusive Breastfeeding",
+        "dailyMeals": null,
+        "recommendedFoods": [],
+        "notes": "Continue breastfeeding on demand. Avoid introducing solids unless advised by a pediatrician for specific cases."
+      },
+      {
+        "ageMonths": 5,
+        "feedingType": "Exclusive Breastfeeding",
+        "dailyMeals": null,
+        "recommendedFoods": [],
+        "notes": "Prepare for complementary feeding next month. Continue breastfeeding as the primary nutrition source."
+      },
+      {
+        "ageMonths": 6,
+        "feedingType": "Breastfeeding + Complementary Foods",
+        "dailyMeals": 2,
+        "recommendedFoods": ["mashed banana", "pureed apple", "pureed carrot", "rice porridge", "iron-fortified cereals"],
+        "notes": "Introduce one new food every 3-4 days to monitor allergies. Start with single-ingredient purees. Breastfeed before solids."
+      },
+      {
+        "ageMonths": 7,
+        "feedingType": "Breastfeeding + Complementary Foods",
+        "dailyMeals": 2,
+        "recommendedFoods": ["mashed avocado", "pureed peas", "dal water", "oatmeal porridge", "pureed pear"],
+        "notes": "Offer 1-2 tablespoons per meal, gradually increasing. Ensure foods are smooth and lump-free. Continue breastfeeding on demand."
+      },
+      {
+        "ageMonths": 8,
+        "feedingType": "Breastfeeding + Complementary Foods",
+        "dailyMeals": 3,
+        "recommendedFoods": ["mashed potato", "pureed spinach", "khichdi", "mashed mango", "yogurt"],
+        "notes": "Introduce mashed textures. Include iron-rich foods like dal and spinach. Breastfeed as primary nutrition source."
+      },
+      {
+        "ageMonths": 9,
+        "feedingType": "Breastfeeding + Complementary Foods",
+        "dailyMeals": 3,
+        "recommendedFoods": ["soft boiled egg yolk", "mashed lentils", "pureed broccoli", "idli", "mashed papaya"],
+        "notes": "Offer small, soft pieces for self-feeding. Ensure variety in vegetables and fruits. Monitor for allergic reactions."
+      },
+      {
+        "ageMonths": 10,
+        "feedingType": "Breastfeeding + Complementary Foods",
+        "dailyMeals": 3,
+        "recommendedFoods": ["soft rice", "mashed sweet potato", "pureed chicken", "banana pieces", "curd"],
+        "notes": "Introduce proteins like chicken or fish (if non-vegetarian). Offer finger foods to encourage chewing. Breastfeed on demand."
+      },
+      {
+        "ageMonths": 11,
+        "feedingType": "Breastfeeding + Complementary Foods",
+        "dailyMeals": 4,
+        "recommendedFoods": ["vegetable khichdi", "soft paneer", "mashed peas", "apple pieces", "oat porridge"],
+        "notes": "Increase meal frequency. Offer a mix of mashed and soft finger foods. Ensure iron and protein intake."
+      },
+      {
+        "ageMonths": 12,
+        "feedingType": "Breastfeeding + Regular Family Diet",
+        "dailyMeals": 5,
+        "recommendedFoods": ["vegetable pulao", "fruit pieces", "curd", "boiled egg", "soft paneer"],
+        "notes": "Transition to family foods with soft textures. Include 3 meals and 2 snacks. Continue breastfeeding 3-4 times daily."
+      },
+      {
+        "ageMonths": 18,
+        "feedingType": "Regular Family Diet + Milk",
+        "dailyMeals": 5,
+        "recommendedFoods": ["roti with dal", "mixed vegetable curry", "fruit salad", "boiled fish", "milk"],
+        "notes": "Offer balanced meals with grains, proteins, and vegetables. Limit sugar and salt. Breastfeed or offer cow’s milk (1-2 cups daily)."
+      },
+      {
+        "ageMonths": 24,
+        "feedingType": "Regular Family Diet",
+        "dailyMeals": 5,
+        "recommendedFoods": ["whole wheat chapati", "lentil soup", "steamed vegetables", "chicken curry", "banana smoothie"],
+        "notes": "Encourage self-feeding with utensils. Ensure 3 meals and 2 healthy snacks. Limit processed foods."
+      },
+      {
+        "ageMonths": 36,
+        "feedingType": "Regular Family Diet",
+        "dailyMeals": 5,
+        "recommendedFoods": ["vegetable biryani", "paneer tikka", "fruit yogurt", "egg bhurji", "mixed dal"],
+        "notes": "Provide balanced meals with adequate calcium, iron, and fiber. Involve child in meal choices to encourage healthy habits."
+      },
+      {
+        "ageMonths": 48,
+        "feedingType": "Regular Family Diet",
+        "dailyMeals": 5,
+        "recommendedFoods": ["whole grain pasta", "mixed vegetable stir-fry", "milkshake", "grilled fish", "sprouts salad"],
+        "notes": "Focus on variety and nutrient density. Ensure 2-3 servings of fruits and vegetables daily. Limit sugary drinks."
+      },
+      {
+        "ageMonths": 60,
+        "feedingType": "Regular Family Diet",
+        "dailyMeals": 5,
+        "recommendedFoods": ["quinoa salad", "chicken wrap", "fruit custard", "vegetable soup", "whole grain bread"],
+        "notes": "Encourage healthy eating habits with balanced portions. Include protein, whole grains, and healthy fats. Promote water intake."
+      }
+    ]
+  }

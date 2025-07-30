@@ -46,7 +46,7 @@ export default function ForgotPasswordPage() {
         setError(errorMessage);
       }
     } catch (err) {
-      console.error('Error in password reset request:', err);
+      // Error in password reset request
       setLoading(false);
       setError('Network error. Please check your connection and try again.');
     }

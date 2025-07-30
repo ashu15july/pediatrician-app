@@ -152,6 +152,7 @@ const Patients = ({ onPatientAdded }) => {
           <table className="min-w-full divide-y divide-blue-100">
             <thead className="bg-blue-50">
               <tr>
+                <th className="px-6 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Patient ID</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Name</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Age</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-blue-700 uppercase tracking-wider">Guardian</th>
@@ -162,6 +163,10 @@ const Patients = ({ onPatientAdded }) => {
             <tbody className="bg-white divide-y divide-blue-50">
               {filteredPatients.map((patient) => (
                 <tr key={patient.id} className="hover:bg-blue-50 transition-all duration-150">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-bold text-blue-900">{patient.patient_id || 'N/A'}</div>
+                    <div className="text-xs text-blue-500">ID</div>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-bold text-blue-900">{patient.name}</div>
                     <div className="text-xs text-blue-500">{patient.gender}</div>

@@ -26,13 +26,16 @@ export function ClinicProvider({ children }) {
       
       try {
         const { data, error } = await supabase
-          .rpc('get_clinic_by_subdomain', { clinic_subdomain: subdomain });
+          .from('clinics')
+          .select('*')
+          .eq('subdomain', subdomain)
+          .single();
         
         if (error) {
           setError(error.message);
           setClinic(null);
-        } else if (data && data.length > 0) {
-          setClinic(data[0]);
+        } else if (data) {
+          setClinic(data);
         } else {
           setError('Clinic not found');
           setClinic(null);

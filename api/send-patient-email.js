@@ -748,14 +748,14 @@ function streamToBuffer(stream) {
 
 module.exports = async function handler(req, res) {
   try {
-    if (req.method !== 'POST') {
-      return res.status(405).json({ error: 'Method not allowed' });
-    }
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
-    const { patientId, email, subject, emailOption } = req.body;
-    if (!patientId || !email || !subject || !emailOption) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
+  const { patientId, email, subject, emailOption } = req.body;
+  if (!patientId || !email || !subject || !emailOption) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
 
     // Test PDFKit functionality first
     try {
@@ -812,8 +812,8 @@ module.exports = async function handler(req, res) {
       }
     } catch (err) {
       console.error('PDF generation failed:', err);
-      return res.status(500).json({
-        error: 'PDF generation failed',
+      return res.status(500).json({ 
+        error: 'PDF generation failed', 
         details: err.message,
         stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
       });
@@ -945,9 +945,9 @@ module.exports = async function handler(req, res) {
       // console.log('Result from emailService.sendEmail:', result);
       if (result && result.success === false) {
         throw new Error(result.error || 'Unknown error from email service');
-      }
+    }
       // console.log('Email sent successfully to:', patient.guardian_email);
-      return res.status(200).json({ success: true, message: 'Email sent successfully' });
+    return res.status(200).json({ success: true, message: 'Email sent successfully' });
     } catch (error) {
       console.error('Failed to send email:', error);
       return res.status(500).json({ error: 'Failed to send email', details: error.message });

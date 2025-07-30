@@ -97,9 +97,55 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     try {
+      // Get clinic subdomain from multiple sources
+      const subdomain = localStorage.getItem('currentClinicSubdomain') || 
+                       (() => {
+                         const hostname = window.location.hostname;
+                         if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                           const urlParams = new URLSearchParams(window.location.search);
+                           return urlParams.get('clinic');
+                         }
+                         const parts = hostname.split('.');
+                         return parts.length > 2 && parts[0] !== 'www' ? parts[0] : null;
+                       })() ||
+                       // Try to get from current URL if we're on a subdomain
+                       (() => {
+                         const hostname = window.location.hostname;
+                         if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+                           const parts = hostname.split('.');
+                           if (parts.length > 2 && parts[0] !== 'www') {
+                             return parts[0];
+                           }
+                         }
+                         return null;
+                       })();
+      
+      // Clear user data
       localStorage.removeItem('currentUser');
       setUser(null);
       setIsLoggedIn(false);
+      
+      // Redirect to clinic page
+      if (subdomain) {
+        // For production, redirect to subdomain
+        if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+          const redirectUrl = `https://${subdomain}.${window.location.hostname.replace(/^[^.]+\./, '')}`;
+          setTimeout(() => {
+            window.location.replace(redirectUrl);
+          }, 100);
+        } else {
+          // For local development, redirect to root with clinic parameter
+          const redirectUrl = `/?clinic=${subdomain}`;
+          setTimeout(() => {
+            window.location.replace(redirectUrl);
+          }, 100);
+        }
+      } else {
+        // Fallback to root
+        setTimeout(() => {
+          window.location.replace('/');
+        }, 100);
+      }
     } catch (error) {
       console.error('Logout error details:', error);
       throw error;

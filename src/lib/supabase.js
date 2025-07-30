@@ -5,10 +5,8 @@ const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://ralwazowulpsg
 const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJhbHdhem93dWxwc2dza21yZ3N5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk5OTY5MzgsImV4cCI6MjA2NTU3MjkzOH0.wPDNzjQUSxGiHGLKlt3sRMLIfoqUjxp2qiF5OhzGRGM';
 
 if (!process.env.REACT_APP_SUPABASE_URL || !process.env.REACT_APP_SUPABASE_ANON_KEY) {
-  console.warn('Environment variables not loaded, using fallback values for development');
+  // Environment variables not loaded, using fallback values for development
 }
-
-console.log('Initializing Supabase client with URL:', supabaseUrl);
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -152,9 +150,9 @@ export const initializeDatabase = async () => {
     // Check if tables exist and create them if they don't
     const { error } = await supabase.rpc('initialize_database');
     if (error) throw error;
-    console.log('Database initialized successfully');
+    // Database initialized successfully
   } catch (error) {
-    console.error('Error initializing database:', error);
+    // Error initializing database
   }
 };
 
@@ -165,7 +163,7 @@ export const checkDatabaseConnection = async () => {
     if (error) throw error;
     return true;
   } catch (error) {
-    console.error('Database connection error:', error);
+    // Database connection error
     return false;
   }
 }; 

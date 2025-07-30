@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Plus, FileText, Calendar, User, Phone, MapPin, Heart, AlertTriangle, Check, Clock, Edit, Trash2, Activity, Syringe, ChevronUp, ChevronDown, Mail, MessageCircle } from 'lucide-react';
+import { X, Plus, FileText, Calendar, User, Phone, MapPin, Heart, AlertTriangle, Check, Clock, Edit, Trash2, Activity, Syringe, ChevronUp, ChevronDown, Mail, MessageCircle, Hash } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useClinicAuth } from '../contexts/ClinicAuthContext';
 import { addVisitNote, getVisitNotes } from '../services/patientService';
@@ -100,7 +100,7 @@ function getGrowthData(gender, patientVitals, valueType) {
 function StarShape(props) {
   const { cx, cy, fill } = props;
   if (cx == null || cy == null) {
-    console.log('StarShape missing cx/cy:', props);
+    // StarShape missing cx/cy
     return null;
   }
   return (
@@ -609,7 +609,7 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
       await addVisitNote(noteData);
       
       // Debug log for appointment_id
-      console.log('handleAddNote: patient.appointment_id =', patient.appointment_id);
+      // handleAddNote: patient.appointment_id
       // Update appointment status to 'completed' if there's an appointment_id
       if (patient.appointment_id) {
         const { error: appointmentError } = await supabase
@@ -640,11 +640,8 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
         ]);
         // Optionally handle apptError
         // Send appointment confirmation email if patient has email
-        console.log('PatientDetails follow-up patient:', patient);
-        console.log('PatientDetails follow-up patient.guardian_email:', patient.guardian_email);
         if (patient.guardian_email) {
           try {
-            console.log('Sending appointment confirmation email to:', patient.guardian_email);
             const response = await fetch('/api/send-appointment-confirmation', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -657,11 +654,12 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
                 clinicName: clinic?.name || '',
                 clinicAddress: clinic?.address || '',
                 clinicPhone: clinic?.phone || '',
-                notes: followUpNotes || ''
+                notes: followUpNotes || '',
+                appointmentType: 'followup'
               })
             });
             const responseBody = await response.json().catch(() => ({}));
-            console.log('Appointment confirmation email response:', response.status, responseBody);
+            // Appointment confirmation email response
           } catch (err) {
             console.error('Failed to send appointment confirmation email:', err);
           }
@@ -941,6 +939,13 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
                 <div>
                   <p className="text-xs text-gray-500 dark:text-gray-300">Name</p>
                   <p className="font-semibold text-lg text-gray-800 dark:text-gray-100">{patient.name}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Hash className="h-5 w-5 text-blue-400" />
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-300">Patient ID</p>
+                  <p className="font-semibold text-lg text-gray-800 dark:text-gray-100">{patient.patient_id || 'N/A'}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">

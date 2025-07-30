@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-  console.log('OPENAI_API_KEY:', process.env.OPENAI_API_KEY ? 'SET' : 'NOT SET');
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -38,11 +37,6 @@ Patient details (no identifiers):\n${JSON.stringify(clinical_context, null, 2)}\
       })
     });
     const data = await response.json();
-    console.log('OpenAI API response:', data);
-    // Log the raw message content for debugging
-    if (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
-      console.log('OpenAI raw content:', data.choices[0].message.content);
-    }
 
     if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
       return res.status(500).json({
@@ -60,7 +54,6 @@ Patient details (no identifiers):\n${JSON.stringify(clinical_context, null, 2)}\
     }
     res.status(200).json(aiResult);
   } catch (err) {
-    console.error('AI feedback error:', err);
     res.status(500).json({ error: 'Failed to get AI feedback', details: err.message });
   }
 } 

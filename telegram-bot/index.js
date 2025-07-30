@@ -46,7 +46,7 @@ async function start() {
 
   const PORT = process.env.PORT || 3001;
   app.listen(PORT, () => {
-    console.log(`Telegram bot server listening on port ${PORT}`);
+    // Telegram bot server listening
   });
 }
 

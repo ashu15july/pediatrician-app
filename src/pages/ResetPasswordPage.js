@@ -60,7 +60,7 @@ export default function ResetPasswordPage() {
         setError(errorMessage);
       }
     } catch (err) {
-      console.error('Error in password reset:', err);
+      // Error in password reset
       setLoading(false);
       setError('Network error. Please check your connection and try again.');
     }

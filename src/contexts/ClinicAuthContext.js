@@ -54,20 +54,22 @@ export function ClinicAuthProvider({ children }) {
   const fetchClinicBySubdomain = async (subdomain) => {
     try {
       const { data: clinicData, error } = await supabase
-        .rpc('get_clinic_by_subdomain', { clinic_subdomain: subdomain });
+        .from('clinics')
+        .select('*')
+        .eq('subdomain', subdomain)
+        .single();
 
       if (error) {
         console.error('Error fetching clinic:', error);
         return;
       }
 
-      if (clinicData && clinicData.length > 0) {
-        const clinic = clinicData[0];
+      if (clinicData) {
         setCurrentClinic({
-          subdomain: clinic.subdomain,
-          domain: clinic.domain_url,
-          name: clinic.name,
-          id: clinic.id
+          subdomain: clinicData.subdomain,
+          domain: clinicData.domain_url,
+          name: clinicData.name,
+          id: clinicData.id
         });
       }
     } catch (error) {
@@ -115,19 +117,44 @@ export function ClinicAuthProvider({ children }) {
   };
 
   const logout = () => {
+    // Get subdomain before clearing localStorage
+    const subdomain = currentClinic?.subdomain;
+    
+    // Clear user state but keep clinic subdomain for redirect
     localStorage.removeItem('clinicUser');
-    localStorage.removeItem('currentClinicSubdomain');
     setCurrentUser(null);
     setIsLoggedIn(false);
+    
     // Clear the session email - handle the RPC call properly
     try {
       supabase.rpc('clear_user_email_session').then(() => {
-        console.log('User email session cleared');
+        // Session cleared successfully
       }).catch((error) => {
         console.error('Error clearing user email session:', error);
       });
     } catch (error) {
       console.error('Error calling clear_user_email_session:', error);
+    }
+    
+    if (subdomain) {
+      // For production, redirect to subdomain
+      if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        const redirectUrl = `https://${subdomain}.${window.location.hostname.replace(/^[^.]+\./, '')}`;
+        setTimeout(() => {
+          window.location.replace(redirectUrl);
+        }, 100);
+      } else {
+        // For local development, redirect to root with clinic parameter
+        const redirectUrl = `/?clinic=${subdomain}`;
+        setTimeout(() => {
+          window.location.replace(redirectUrl);
+        }, 100);
+      }
+    } else {
+      // Fallback to root
+      setTimeout(() => {
+        window.location.replace('/');
+      }, 100);
     }
   };
 

@@ -49,8 +49,25 @@ export function SuperAdminAuthProvider({ children }) {
   };
 
   const logout = () => {
+    // Clear user data
     localStorage.removeItem('superAdminUser');
     setCurrentUser(null);
+    setIsLoggedIn(false);
+    
+    // Super admin should redirect to the main domain (not a specific clinic)
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      // For production, redirect to main domain
+      const mainDomain = window.location.hostname.replace(/^[^.]+\./, '');
+      const redirectUrl = `https://${mainDomain}`;
+      setTimeout(() => {
+        window.location.replace(redirectUrl);
+      }, 100);
+    } else {
+      // For local development, redirect to root
+      setTimeout(() => {
+        window.location.replace('/');
+      }, 100);
+    }
   };
 
   const value = {

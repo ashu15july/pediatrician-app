@@ -2,7 +2,6 @@ import { supabase } from '../lib/supabase';
 
 // Helper function to handle Supabase errors
 const handleSupabaseError = (error, operation) => {
-  console.error(`Error ${operation}:`, error);
   throw new Error(`Failed to ${operation}: ${error.message}`);
 };
 
@@ -11,7 +10,7 @@ export const getPatients = async (clinicId) => {
   try {
     const { data, error } = await supabase
       .from('patients')
-      .select('id, name, age, dob, gender, guardian_name, guardian_phone, guardian_email, address, blood_group, allergies, medical_history, created_at, last_visit, guardian_relationship, delivery_type, birth_term, gestational_age_weeks, clinic_id, telegram_chat_id')
+      .select('id, patient_id, name, age, dob, gender, guardian_name, guardian_phone, guardian_email, address, blood_group, allergies, medical_history, created_at, last_visit, guardian_relationship, delivery_type, birth_term, gestational_age_weeks, clinic_id, telegram_chat_id')
       .eq('clinic_id', clinicId)
       .order('created_at', { ascending: false });
     

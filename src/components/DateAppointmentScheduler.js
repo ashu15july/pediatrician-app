@@ -165,7 +165,8 @@ const DateAppointmentScheduler = ({
         type: appointmentType,
         notes: notes,
         status: 'scheduled',
-        clinic_id: clinic.id
+        clinic_id: clinic.id,
+        created_by: activeUser?.id // Add the created_by field for staff-created appointments
       };
 
       let result;
@@ -226,6 +227,40 @@ const DateAppointmentScheduler = ({
       onAppointmentScheduled(result);
       onCancel();
 
+      // Send appointment confirmation email if patient has email
+      
+      if (selectedPatient.guardian_email) {
+        try {
+          const emailData = {
+            patientEmail: selectedPatient.guardian_email,
+            patientName: selectedPatient.name,
+            appointmentDate: appointmentDateString,
+            appointmentTime: timeSlot,
+            doctorName: (propDoctors.find(d => d.id === selectedDoctor)?.full_name) || '',
+            clinicName: clinic.name,
+            clinicAddress: clinic.address || '',
+            clinicPhone: clinic.phone || '',
+            notes: notes || '',
+            appointmentType: appointmentType
+          };
+          
+          const response = await fetch('/api/send-appointment-confirmation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(emailData)
+          });
+          
+          const responseBody = await response.json().catch(() => ({}));
+          
+          if (!response.ok) {
+            // Email failed
+          }
+        } catch (err) {
+          // Failed to send appointment confirmation email
+        }
+      }
+
+      // Try WhatsApp message (optional, can fail without affecting appointment creation)
       try {
         await sendWhatsAppMessage({
           userId: activeUser.id,
@@ -242,11 +277,10 @@ const DateAppointmentScheduler = ({
         // Optionally show a toast/alert: "WhatsApp confirmation sent!"
       } catch (err) {
         // Optionally show a toast/alert: "Failed to send WhatsApp message"
-        console.error('WhatsApp message error:', err);
+        // WhatsApp message error
       }
 
     } catch (err) {
-      console.error('Error saving appointment:', err);
       setError(err.message || 'Failed to save appointment');
     } finally {
       setLoading(false);

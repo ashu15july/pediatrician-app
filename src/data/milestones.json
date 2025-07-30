@@ -1,75 +1,102 @@
 {
-    "milestones": [
-      {
-        "ageRange": "0-2 months",
-        "cognitive": ["Follows faces and bright objects"],
-        "grossMotor": ["Lifts head briefly during tummy time"],
-        "fineMotor": ["Keeps hands in fists", "Grasps reflexively"],
-        "communicationSocial": ["Cries to express needs", "Begins cooing"]
-      },
-      {
-        "ageRange": "3-4 months",
-        "cognitive": ["Recognizes caregivers"],
-        "grossMotor": ["Pushes up on arms", "Rolls from tummy to back"],
-        "fineMotor": ["Reaches for toys", "Holds toys briefly"],
-        "communicationSocial": ["Smiles socially", "Starts babbling (e.g., 'ah-goo')"]
-      },
-      {
-        "ageRange": "5-6 months",
-        "cognitive": ["Looks around with curiosity"],
-        "grossMotor": ["Rolls both ways", "Sits with support"],
-        "fineMotor": ["Passes toys from one hand to another"],
-        "communicationSocial": ["Laughs", "Responds to name"]
-      },
-      {
-        "ageRange": "7-8 months",
-        "cognitive": ["Understands object permanence"],
-        "grossMotor": ["Sits independently", "Starts crawling"],
-        "fineMotor": ["Bangs objects together"],
-        "communicationSocial": ["Responds to familiar words", "Recognizes tone of voice"]
-      },
-      {
-        "ageRange": "9-10 months",
-        "cognitive": ["Explores by putting things in mouth"],
-        "grossMotor": ["Pulls to stand", "Cruises along furniture"],
-        "fineMotor": ["Picks up small items using pincer grip"],
-        "communicationSocial": ["Imitates sounds", "Points with fingers"]
-      },
-      {
-        "ageRange": "11-12 months",
-        "cognitive": ["Begins problem-solving (e.g., gets toy from box)"],
-        "grossMotor": ["May take first steps", "Stands independently"],
-        "fineMotor": ["Feeds self with fingers"],
-        "communicationSocial": ["Says 'mama', 'dada' with meaning", "Waves bye-bye"]
-      },
-      {
-        "ageRange": "13-15 months",
-        "cognitive": ["Imitates daily tasks like brushing or talking on phone"],
-        "grossMotor": ["Walks alone", "Squats to pick up things"],
-        "fineMotor": ["Builds tower with 2 blocks"],
-        "communicationSocial": ["Says 3–5 words", "Follows simple instructions"]
-      },
-      {
-        "ageRange": "16-18 months",
-        "cognitive": ["Begins pretend play (e.g., feeding doll)"],
-        "grossMotor": ["Climbs furniture", "Walks up stairs with help"],
-        "fineMotor": ["Uses spoon with help"],
-        "communicationSocial": ["Uses 10+ words", "Understands more than says"]
-      },
-      {
-        "ageRange": "19-21 months",
-        "cognitive": ["Matches shapes in puzzles"],
-        "grossMotor": ["Runs stiffly", "Kicks ball"],
-        "fineMotor": ["Scribbles with crayons"],
-        "communicationSocial": ["Combines 2 words ('want juice')", "Follows 2-step commands"]
-      },
-      {
-        "ageRange": "22-24 months",
-        "cognitive": ["Understands concepts like 'in/on', 'big/small'"],
-        "grossMotor": ["Jumps in place", "Climbs stairs"],
-        "fineMotor": ["Turns book pages", "Builds tower with 4+ blocks"],
-        "communicationSocial": ["Uses 50+ words", "Speaks in 2–3 word phrases"]
-      }
-    ]
-  }
-  
+  "milestones": [
+    {
+      "ageRange": "0-2 months",
+      "cognitive": ["Follows faces and bright objects"],
+      "grossMotor": ["Lifts head briefly during tummy time"],
+      "fineMotor": ["Keeps hands in fists", "Grasps reflexively"],
+      "communicationSocial": ["Cries to express needs", "Begins cooing"]
+    },
+    {
+      "ageRange": "3-4 months",
+      "cognitive": ["Recognizes caregivers"],
+      "grossMotor": ["Pushes up on arms", "Rolls from tummy to back"],
+      "fineMotor": ["Reaches for toys", "Holds toys briefly"],
+      "communicationSocial": ["Smiles socially", "Starts babbling (e.g., 'ah-goo')"]
+    },
+    {
+      "ageRange": "5-6 months",
+      "cognitive": ["Looks around with curiosity"],
+      "grossMotor": ["Rolls both ways", "Sits with support"],
+      "fineMotor": ["Passes toys from one hand to another"],
+      "communicationSocial": ["Laughs", "Responds to name"]
+    },
+    {
+      "ageRange": "7-8 months",
+      "cognitive": ["Understands object permanence"],
+      "grossMotor": ["Sits independently", "Starts crawling"],
+      "fineMotor": ["Bangs objects together"],
+      "communicationSocial": ["Responds to familiar words", "Recognizes tone of voice"]
+    },
+    {
+      "ageRange": "9-10 months",
+      "cognitive": ["Explores by putting things in mouth"],
+      "grossMotor": ["Pulls to stand", "Cruises along furniture"],
+      "fineMotor": ["Picks up small items using pincer grip"],
+      "communicationSocial": ["Imitates sounds", "Points with fingers"]
+    },
+    {
+      "ageRange": "11-12 months",
+      "cognitive": ["Begins problem-solving (e.g., gets toy from box)"],
+      "grossMotor": ["May take first steps", "Stands independently"],
+      "fineMotor": ["Feeds self with fingers"],
+      "communicationSocial": ["Says 'mama', 'dada' with meaning", "Waves bye-bye"]
+    },
+    {
+      "ageRange": "13-15 months",
+      "cognitive": ["Imitates daily tasks like brushing or talking on phone"],
+      "grossMotor": ["Walks alone", "Squats to pick up things"],
+      "fineMotor": ["Builds tower with 2 blocks"],
+      "communicationSocial": ["Says 3–5 words", "Follows simple instructions"]
+    },
+    {
+      "ageRange": "16-18 months",
+      "cognitive": ["Begins pretend play (e.g., feeding doll)"],
+      "grossMotor": ["Climbs furniture", "Walks up stairs with help"],
+      "fineMotor": ["Uses spoon with help"],
+      "communicationSocial": ["Uses 10+ words", "Understands more than says"]
+    },
+    {
+      "ageRange": "19-21 months",
+      "cognitive": ["Matches shapes in puzzles"],
+      "grossMotor": ["Runs stiffly", "Kicks ball"],
+      "fineMotor": ["Scribbles with crayons"],
+      "communicationSocial": ["Combines 2 words ('want juice')", "Follows 2-step commands"]
+    },
+    {
+      "ageRange": "22-24 months",
+      "cognitive": ["Understands concepts like 'in/on', 'big/small'"],
+      "grossMotor": ["Jumps in place", "Climbs stairs"],
+      "fineMotor": ["Turns book pages", "Builds tower with 4+ blocks"],
+      "communicationSocial": ["Uses 50+ words", "Speaks in 2–3 word phrases"]
+    },
+    {
+      "ageRange": "2-3 years",
+      "cognitive": ["Sorts objects by shape and color", "Begins to understand time"],
+      "grossMotor": ["Runs well", "Kicks ball forward", "Stands on tiptoes"],
+      "fineMotor": ["Builds tower with 6+ blocks", "Turns knobs and lids"],
+      "communicationSocial": ["Says full name", "Asks 'what' and 'where' questions"]
+    },
+    {
+      "ageRange": "3-4 years",
+      "cognitive": ["Can name colors and some numbers", "Understands same vs. different"],
+      "grossMotor": ["Pedals tricycle", "Catches a ball most of the time"],
+      "fineMotor": ["Draws simple shapes", "Uses scissors with some accuracy"],
+      "communicationSocial": ["Speaks in 5+ word sentences", "Enjoys pretend play with others"]
+    },
+    {
+      "ageRange": "4-5 years",
+      "cognitive": ["Can tell stories", "Understands simple cause and effect"],
+      "grossMotor": ["Hops on one foot", "Stands on one foot for 10 seconds"],
+      "fineMotor": ["Draws person with at least 3 body parts", "Uses fork and spoon well"],
+      "communicationSocial": ["Follows 3-step instructions", "Sings songs or poems from memory"]
+    },
+    {
+      "ageRange": "5 years",
+      "cognitive": ["Understands rules and fairness", "Counts up to 20 or more"],
+      "grossMotor": ["Skips", "Swings and climbs confidently"],
+      "fineMotor": ["Prints some letters", "Ties shoelaces with help"],
+      "communicationSocial": ["Has clear conversations", "Shows empathy and concern for others"]
+    }
+  ]
+}

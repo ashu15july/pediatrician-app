@@ -50,7 +50,7 @@ export default function VerifyOtpPage() {
         setError(errorMessage);
       }
     } catch (err) {
-      console.error('Error in OTP verification:', err);
+      // Error in OTP verification
       setLoading(false);
       setError('Network error. Please check your connection and try again.');
     }

@@ -20,9 +20,12 @@ export default function ClinicLoginPage() {
       if (subdomain) {
         try {
           setClinicLoading(true);
-          // Fetch clinic information from database using RPC function
+          // Fetch clinic information from database using direct query
           const { data: clinicData, error } = await supabase
-            .rpc('get_clinic_by_subdomain', { clinic_subdomain: subdomain });
+            .from('clinics')
+            .select('*')
+            .eq('subdomain', subdomain)
+            .single();
 
           if (error) {
             setClinicInfo({
@@ -30,8 +33,8 @@ export default function ClinicLoginPage() {
               domain: `https://${subdomain}.myapp.com`,
               credentials: []
             });
-          } else if (clinicData && clinicData.length > 0) {
-            const clinic = clinicData[0];
+          } else if (clinicData) {
+            const clinic = clinicData;
             
             // Fetch users for this clinic using direct query instead of RPC
             const { data: users, error: usersError } = await supabase

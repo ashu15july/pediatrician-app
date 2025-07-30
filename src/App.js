@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './contexts/AuthContext';
 import { ClinicAuthProvider, useClinicAuth } from './contexts/ClinicAuthContext';
 import { SuperAdminAuthProvider } from './contexts/SuperAdminAuthContext';
+import { PatientAuthProvider } from './contexts/PatientAuthContext';
 import ClinicLoginPage from './pages/ClinicLoginPage';
 import SuperAdminLoginPage from './pages/SuperAdminLoginPage';
 import SuperAdminAuthWrapper from './components/SuperAdminAuthWrapper';
@@ -31,6 +32,9 @@ import DocumentationPage from './pages/DocumentationPage';
 import PrivacyPage from './pages/PrivacyPage';
 import TermsPage from './pages/TermsPage';
 import CookiesPage from './pages/CookiesPage';
+import ClinicLandingPage from './pages/ClinicLandingPage';
+import PatientLoginPage from './pages/PatientLoginPage';
+import PatientDashboard from './components/PatientDashboard';
 
 function ClinicAppContent() {
   const { currentUser: clinicUser, isLoggedIn: isClinicLoggedIn, loading: clinicLoading } = useClinicAuth();
@@ -153,9 +157,9 @@ function ClinicAppContent() {
       loadPatients();
       loadDoctors();
     } else {
-      console.log('ClinicAppContent useEffect: User is not logged in or no clinic subdomain');
-      console.log('ClinicAppContent useEffect: isActiveLoggedIn =', isActiveLoggedIn);
-      console.log('ClinicAppContent useEffect: clinicSubdomain =', clinicSubdomain);
+      if (isActiveLoggedIn && !clinicSubdomain) {
+        setError('No clinic subdomain detected. Please check your URL or contact support. If testing locally, add ?clinic=your-subdomain to the URL.');
+      }
     }
   }, [isActiveLoggedIn, clinicSubdomain]);
 
@@ -192,13 +196,15 @@ function ClinicAppContent() {
       if (error) throw error;
       setAppointments(data || []);
     } catch (err) {
-      console.error('Error loading appointments:', err);
       setError('Failed to load appointments. Please try again.');
     }
   };
 
   const loadPatients = async () => {
-    if (!clinicSubdomain) return;
+    if (!clinicSubdomain) {
+      setError('No clinic subdomain detected. Please check your URL or contact support.');
+      return;
+    }
     
     try {
       // Use RPC function to get clinic-specific patients
@@ -208,9 +214,9 @@ function ClinicAppContent() {
       if (error) {
         throw error;
       }
+      
       setPatients(data || []);
     } catch (err) {
-      console.error('loadPatients: Error loading patients:', err);
       setError('Failed to load patients. Please try again.');
     }
   };
@@ -236,7 +242,6 @@ function ClinicAppContent() {
       }
       setDoctors(data || []);
     } catch (err) {
-      console.error('loadDoctors: Error loading doctors:', err);
       setError('Failed to load doctors. Please try again.');
     }
   };
@@ -271,7 +276,6 @@ function ClinicAppContent() {
       if (error) throw error;
       await loadAppointments(); // Refresh appointments after deletion
     } catch (err) {
-      console.error('Error deleting appointment:', err);
       setError('Failed to delete appointment. Please try again.');
     }
   };
@@ -356,7 +360,8 @@ function App() {
       <ClinicAuthProvider>
         <AuthProvider>
           <SuperAdminAuthProvider>
-            <Routes>
+            <PatientAuthProvider>
+              <Routes>
               {/* Super Admin Routes - Available on localhost without subdomain */}
               <Route path="/superadmin-login" element={<SuperAdminLoginPage />} />
               <Route path="/superadmin/*" element={
@@ -372,6 +377,10 @@ function App() {
               <Route path="/clinic-login" element={<ClinicLoginPage />} />
               <Route path="/clinic-dashboard" element={<ClinicAppContent />} />
               <Route path="/dashboard" element={<ClinicAppContent />} />
+              
+              {/* Patient Routes */}
+              <Route path="/patient-login" element={<PatientLoginPage />} />
+              <Route path="/patient-dashboard" element={<PatientDashboard />} />
               {/* Marketing/Product Pages */}
               <Route path="/features" element={<FeaturesPage />} />
               <Route path="/pricing" element={<PricingPage />} />
@@ -386,18 +395,19 @@ function App() {
               <Route path="/privacy" element={<PrivacyPage />} />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/cookies" element={<CookiesPage />} />
-              {/* Root route - Show clinic login on subdomains or ?clinic= param, landing page otherwise */}
+              {/* Root route - Show clinic landing on subdomains, landing page otherwise */}
               <Route path="/" element={
-                subdomain ? <ClinicLoginPage /> : <LandingPage />
+                subdomain ? <ClinicLandingPage /> : <LandingPage />
               } />
               {/* Catch all */}
               <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </SuperAdminAuthProvider>
-        </AuthProvider>
-      </ClinicAuthProvider>
-    </Router>
-  );
+                          </Routes>
+            </PatientAuthProvider>
+            </SuperAdminAuthProvider>
+          </AuthProvider>
+        </ClinicAuthProvider>
+      </Router>
+    );
 }
 
 export default App;

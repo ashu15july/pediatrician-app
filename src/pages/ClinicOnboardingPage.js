@@ -8,6 +8,10 @@ export default function ClinicOnboardingPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [address, setAddress] = useState('');
+  const [hours, setHours] = useState('');
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -29,13 +33,17 @@ export default function ClinicOnboardingPage() {
         logo_url = publicUrlData.publicUrl;
       }
       const { error: insertError } = await supabase.from('clinics').insert([
-        { name, subdomain, logo_url }
+        { name, subdomain, logo_url, phone, email, address, hours }
       ]);
       if (insertError) throw insertError;
       setSuccess('Clinic created successfully!');
       setName('');
       setSubdomain('');
       setLogoFile(null);
+      setPhone('');
+      setEmail('');
+      setAddress('');
+      setHours('');
     } catch (err) {
       setError(err.message || 'Failed to create clinic');
     } finally {
@@ -77,6 +85,22 @@ export default function ClinicOnboardingPage() {
             onChange={e => setLogoFile(e.target.files[0])}
             className="w-full"
           />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Phone</label>
+          <input type="text" value={phone} onChange={e => setPhone(e.target.value)} className="mt-1 block w-full border rounded-md p-2" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Email</label>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="mt-1 block w-full border rounded-md p-2" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Address</label>
+          <input type="text" value={address} onChange={e => setAddress(e.target.value)} className="mt-1 block w-full border rounded-md p-2" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Hours</label>
+          <input type="text" value={hours} onChange={e => setHours(e.target.value)} className="mt-1 block w-full border rounded-md p-2" />
         </div>
         {error && <div className="text-red-600 dark:text-red-400 font-semibold">{error}</div>}
         {success && <div className="text-green-600 dark:text-green-400 font-semibold">{success}</div>}
