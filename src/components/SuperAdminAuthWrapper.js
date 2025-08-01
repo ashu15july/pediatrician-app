@@ -1,16 +1,18 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSuperAdminAuth } from '../contexts/SuperAdminAuthContext';
 
 export default function SuperAdminAuthWrapper({ children }) {
   const { currentUser, loading } = useSuperAdminAuth();
+  const navigate = useNavigate();
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
 
   if (!currentUser) {
-    // Not logged in, redirect to login page
-    window.location.href = '/superadmin-login';
+    // Not logged in, redirect to login page using React Router
+    navigate('/superadmin-login');
     return null;
   }
 

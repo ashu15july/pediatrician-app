@@ -118,7 +118,7 @@ const MilestoneTracker = ({ patientId, patientName, patientDOB }) => {
         });
       }
       
-      // Add motor milestones
+      // Add motor milestones (combine gross and fine motor)
       if (ageGroup.grossMotor && Array.isArray(ageGroup.grossMotor)) {
         ageGroup.grossMotor.forEach(milestone => {
           flatMilestones.push({
@@ -130,7 +130,6 @@ const MilestoneTracker = ({ patientId, patientName, patientDOB }) => {
         });
       }
       
-      // Add fine motor milestones
       if (ageGroup.fineMotor && Array.isArray(ageGroup.fineMotor)) {
         ageGroup.fineMotor.forEach(milestone => {
           flatMilestones.push({
@@ -155,10 +154,10 @@ const MilestoneTracker = ({ patientId, patientName, patientDOB }) => {
       }
     });
     
-    // Filter milestones based on current age (show milestones for current age ± 3 months)
+    // Filter to show milestones for current age range and nearby ranges (± 6 months)
     return flatMilestones.filter(milestone => {
       const ageDiff = Math.abs(currentAge - milestone.expectedAge);
-      return ageDiff <= 3; // Show milestones within 3 months of current age
+      return ageDiff <= 6; // Show milestones within 6 months
     });
   };
 

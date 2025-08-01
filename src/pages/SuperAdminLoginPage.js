@@ -16,11 +16,17 @@ export default function SuperAdminLoginPage() {
     setLoading(true);
     
     try {
-      await login(username, password);
-      // Redirect to super admin dashboard using React Router
-      navigate('/superadmin/dashboard');
+      const result = await login(username, password);
+      
+      if (result.success) {
+        // Redirect to super admin dashboard using React Router
+        navigate('/superadmin/');
+      } else {
+        // Show error message from the login function
+        setError(result.error || 'Login failed. Please check your credentials.');
+      }
     } catch (err) {
-      setError(err.message || 'Login failed');
+      setError(err.message || 'An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -32,14 +38,36 @@ export default function SuperAdminLoginPage() {
         <h2 className="text-2xl font-bold text-blue-700 dark:text-blue-200 mb-6 text-center">Super Admin Login</h2>
         <div className="mb-4">
           <label className="block text-sm font-medium mb-1 text-blue-800 dark:text-blue-200">Username</label>
-          <input type="text" value={username} onChange={e => setUsername(e.target.value)} required className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200" />
+          <input 
+            type="text" 
+            value={username} 
+            onChange={e => setUsername(e.target.value)} 
+            required 
+            className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200" 
+            disabled={loading}
+          />
         </div>
         <div className="mb-6">
           <label className="block text-sm font-medium mb-1 text-blue-800 dark:text-blue-200">Password</label>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200" />
+          <input 
+            type="password" 
+            value={password} 
+            onChange={e => setPassword(e.target.value)} 
+            required 
+            className="w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200" 
+            disabled={loading}
+          />
         </div>
-        {error && <div className="text-red-500 text-sm mb-4">{error}</div>}
-        <button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-blue-500 to-emerald-500 text-white py-2 px-8 rounded-full font-bold shadow-lg hover:from-blue-600 hover:to-emerald-600 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-60">
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <div className="text-red-600 text-sm font-medium">{error}</div>
+          </div>
+        )}
+        <button 
+          type="submit" 
+          disabled={loading} 
+          className="w-full bg-gradient-to-r from-blue-500 to-emerald-500 text-white py-2 px-8 rounded-full font-bold shadow-lg hover:from-blue-600 hover:to-emerald-600 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-60"
+        >
           {loading ? 'Logging in...' : 'Login'}
         </button>
         <div className="mt-4 text-center">

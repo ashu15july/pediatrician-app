@@ -7,6 +7,7 @@ const PatientProfile = ({ patientId, patientName, patientDOB }) => {
   const [allergies, setAllergies] = useState([]);
   const [conditions, setConditions] = useState([]);
   const [caregivers, setCaregivers] = useState([]);
+  const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [showAllergyModal, setShowAllergyModal] = useState(false);
@@ -93,6 +94,15 @@ const PatientProfile = ({ patientId, patientName, patientDOB }) => {
 
       if (caregiversError) throw caregiversError;
       setCaregivers(caregiversData || []);
+
+      // Load appointments
+      const { data: appointmentsData, error: appointmentsError } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('patient_id', patientId);
+
+      if (appointmentsError) throw appointmentsError;
+      setAppointments(appointmentsData || []);
 
     } catch (error) {
       console.error('Error loading patient data:', error);
@@ -195,12 +205,34 @@ const PatientProfile = ({ patientId, patientName, patientDOB }) => {
     if (!dob) return '';
     const today = new Date();
     const birthDate = new Date(dob);
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
+    
+    let years = today.getFullYear() - birthDate.getFullYear();
+    let months = today.getMonth() - birthDate.getMonth();
+    
+    // Adjust for negative months
+    if (months < 0) {
+      years--;
+      months += 12;
     }
-    return age;
+    
+    // Adjust for day of month
+    if (today.getDate() < birthDate.getDate()) {
+      months--;
+      if (months < 0) {
+        years--;
+        months += 12;
+      }
+    }
+    
+    if (years === 0) {
+      return months === 1 ? '1 month' : `${months} months`;
+    } else if (months === 0) {
+      return years === 1 ? '1 year' : `${years} years`;
+    } else {
+      const yearText = years === 1 ? '1 year' : `${years} years`;
+      const monthText = months === 1 ? '1 month' : `${months} months`;
+      return `${yearText} ${monthText}`;
+    }
   };
 
   const formatDate = (dateString) => {
@@ -270,10 +302,10 @@ const PatientProfile = ({ patientId, patientName, patientDOB }) => {
               <div>
                 <h1 className="text-3xl font-bold mb-2">{patient?.name}</h1>
                 <div className="flex items-center space-x-4 text-purple-100">
-                  <span className="flex items-center">
-                    <Calendar className="w-4 h-4 mr-2" />
-                    {patient?.dob && `${calculateAge(patient.dob)} years old`}
-                  </span>
+                                     <span className="flex items-center">
+                     <Calendar className="w-4 h-4 mr-2" />
+                     {patient?.dob && calculateAge(patient.dob)}
+                   </span>
                   <span className="flex items-center">
                     <User className="w-4 h-4 mr-2" />
                     {patient?.gender}
@@ -311,7 +343,7 @@ const PatientProfile = ({ patientId, patientName, patientDOB }) => {
               <div className="text-purple-100 text-sm">Caregivers</div>
             </div>
             <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 text-center">
-              <div className="text-2xl font-bold">12</div>
+              <div className="text-2xl font-bold">{appointments.length}</div>
               <div className="text-purple-100 text-sm">Appointments</div>
             </div>
           </div>
@@ -332,123 +364,137 @@ const PatientProfile = ({ patientId, patientName, patientDOB }) => {
           </div>
         </div>
 
-        <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name</label>
-                {editing ? (
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/50 backdrop-blur-sm transition-all duration-300"
-                  />
-                ) : (
-                  <p className="text-gray-800 font-medium">{patient?.name}</p>
-                )}
-              </div>
+                 <div className="p-6">
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+             <div className="space-y-6">
+               <div className="group">
+                 <label className="block text-xs font-bold text-blue-600 uppercase tracking-wide mb-3">Full Name</label>
+                 {editing ? (
+                   <input
+                     type="text"
+                     value={formData.name}
+                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/50 backdrop-blur-sm transition-all duration-300"
+                   />
+                 ) : (
+                   <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4 border border-blue-100 group-hover:border-blue-200 transition-all duration-300">
+                     <p className="text-lg font-semibold text-gray-800">{patient?.name || 'Not specified'}</p>
+                   </div>
+                 )}
+               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Date of Birth</label>
-                {editing ? (
-                  <input
-                    type="date"
-                    value={formData.dob}
-                    onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/50 backdrop-blur-sm transition-all duration-300"
-                  />
-                ) : (
-                  <p className="text-gray-800 font-medium">{patient?.dob && formatDate(patient.dob)}</p>
-                )}
-              </div>
+               <div className="group">
+                 <label className="block text-xs font-bold text-blue-600 uppercase tracking-wide mb-3">Date of Birth</label>
+                 {editing ? (
+                   <input
+                     type="date"
+                     value={formData.dob}
+                     onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
+                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/50 backdrop-blur-sm transition-all duration-300"
+                   />
+                 ) : (
+                   <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100 group-hover:border-green-200 transition-all duration-300">
+                     <p className="text-lg font-semibold text-gray-800">{patient?.dob ? formatDate(patient.dob) : 'Not specified'}</p>
+                   </div>
+                 )}
+               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Gender</label>
-                {editing ? (
-                  <select
-                    value={formData.gender}
-                    onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/50 backdrop-blur-sm transition-all duration-300"
-                  >
-                    <option value="">Select gender</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                  </select>
-                ) : (
-                  <p className="text-gray-800 font-medium">{patient?.gender}</p>
-                )}
-              </div>
+               <div className="group">
+                 <label className="block text-xs font-bold text-blue-600 uppercase tracking-wide mb-3">Gender</label>
+                 {editing ? (
+                   <select
+                     value={formData.gender}
+                     onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/50 backdrop-blur-sm transition-all duration-300"
+                   >
+                     <option value="">Select gender</option>
+                     <option value="Male">Male</option>
+                     <option value="Female">Female</option>
+                     <option value="Other">Other</option>
+                   </select>
+                 ) : (
+                   <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-100 group-hover:border-purple-200 transition-all duration-300">
+                     <p className="text-lg font-semibold text-gray-800">{patient?.gender || 'Not specified'}</p>
+                   </div>
+                 )}
+               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Blood Group</label>
-                {editing ? (
-                  <select
-                    value={formData.bloodGroup}
-                    onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/50 backdrop-blur-sm transition-all duration-300"
-                  >
-                    <option value="">Select blood group</option>
-                    <option value="A+">A+</option>
-                    <option value="A-">A-</option>
-                    <option value="B+">B+</option>
-                    <option value="B-">B-</option>
-                    <option value="AB+">AB+</option>
-                    <option value="AB-">AB-</option>
-                    <option value="O+">O+</option>
-                    <option value="O-">O-</option>
-                  </select>
-                ) : (
-                  <p className="text-gray-800 font-medium">{patient?.blood_group}</p>
-                )}
-              </div>
-            </div>
+               <div className="group">
+                 <label className="block text-xs font-bold text-blue-600 uppercase tracking-wide mb-3">Blood Group</label>
+                 {editing ? (
+                   <select
+                     value={formData.bloodGroup}
+                     onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
+                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/50 backdrop-blur-sm transition-all duration-300"
+                   >
+                     <option value="">Select blood group</option>
+                     <option value="A+">A+</option>
+                     <option value="A-">A-</option>
+                     <option value="B+">B+</option>
+                     <option value="B-">B-</option>
+                     <option value="AB+">AB+</option>
+                     <option value="AB-">AB-</option>
+                     <option value="O+">O+</option>
+                     <option value="O-">O-</option>
+                   </select>
+                 ) : (
+                   <div className="bg-gradient-to-r from-red-50 to-orange-50 rounded-xl p-4 border border-red-100 group-hover:border-red-200 transition-all duration-300">
+                     <p className="text-lg font-semibold text-gray-800">{patient?.blood_group || 'Not specified'}</p>
+                   </div>
+                 )}
+               </div>
+             </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Address</label>
-                {editing ? (
-                  <textarea
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    rows={3}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/50 backdrop-blur-sm transition-all duration-300 resize-none"
-                  />
-                ) : (
-                  <p className="text-gray-800 font-medium">{patient?.address}</p>
-                )}
-              </div>
+             <div className="space-y-6">
+               <div className="group">
+                 <label className="block text-xs font-bold text-blue-600 uppercase tracking-wide mb-3">Address</label>
+                 {editing ? (
+                   <textarea
+                     value={formData.address}
+                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                     rows={3}
+                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/50 backdrop-blur-sm transition-all duration-300 resize-none"
+                   />
+                 ) : (
+                   <div className="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl p-4 border border-indigo-100 group-hover:border-indigo-200 transition-all duration-300">
+                     <p className="text-lg font-semibold text-gray-800">{patient?.address || 'Not specified'}</p>
+                   </div>
+                 )}
+               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Phone</label>
-                {editing ? (
-                  <input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/50 backdrop-blur-sm transition-all duration-300"
-                  />
-                ) : (
-                  <p className="text-gray-800 font-medium">{patient?.guardian_phone}</p>
-                )}
-              </div>
+               <div className="group">
+                 <label className="block text-xs font-bold text-blue-600 uppercase tracking-wide mb-3">Phone</label>
+                 {editing ? (
+                   <input
+                     type="tel"
+                     value={formData.phone}
+                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/50 backdrop-blur-sm transition-all duration-300"
+                   />
+                 ) : (
+                   <div className="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-xl p-4 border border-teal-100 group-hover:border-teal-200 transition-all duration-300">
+                     <p className="text-lg font-semibold text-gray-800">{patient?.guardian_phone || 'Not specified'}</p>
+                   </div>
+                 )}
+               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
-                {editing ? (
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/50 backdrop-blur-sm transition-all duration-300"
-                  />
-                ) : (
-                  <p className="text-gray-800 font-medium">{patient?.guardian_email}</p>
-                )}
-              </div>
-            </div>
-          </div>
+               <div className="group">
+                 <label className="block text-xs font-bold text-blue-600 uppercase tracking-wide mb-3">Email</label>
+                 {editing ? (
+                   <input
+                     type="email"
+                     value={formData.email}
+                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/50 backdrop-blur-sm transition-all duration-300"
+                   />
+                 ) : (
+                   <div className="bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl p-4 border border-yellow-100 group-hover:border-yellow-200 transition-all duration-300">
+                     <p className="text-lg font-semibold text-gray-800">{patient?.guardian_email || 'Not specified'}</p>
+                   </div>
+                 )}
+               </div>
+             </div>
+           </div>
 
           {editing && (
             <div className="flex justify-end mt-6 pt-6 border-t border-gray-100">

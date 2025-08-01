@@ -59,6 +59,7 @@ export default function PatientLoginPage() {
             });
           } else if (clinicData) {
             setClinicInfo({
+              id: clinicData.id,
               name: clinicData.name,
               domain: clinicData.domain_url
             });
@@ -107,6 +108,11 @@ export default function PatientLoginPage() {
     try {
       const { guardianName, guardianPhone, patientName } = findIdForm;
       
+      if (!clinicInfo?.id) {
+        setFindIdError('Clinic information not available. Please refresh the page and try again.');
+        return;
+      }
+      
       // Use the API endpoint to find patient ID
       const response = await fetch('/api/find-patient-id', {
         method: 'POST',
@@ -115,7 +121,7 @@ export default function PatientLoginPage() {
           patientName,
           guardianName,
           guardianPhone,
-          clinicId: clinicInfo?.id
+          clinicId: clinicInfo.id
         })
       });
 

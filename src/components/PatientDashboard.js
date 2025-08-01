@@ -10,7 +10,8 @@ import DocumentManagement from './DocumentManagementBase64';
 import HealthTracker from './HealthTracker';
 import PatientProfile from './PatientProfile';
 import GrowthChart from './GrowthChart';
-import MilestoneTracker from './MilestoneTracker';
+
+import { IAP_SCHEDULE } from '../data/IAP_SCHEDULE';
 
 const PatientDashboard = () => {
   const { currentPatient, currentClinic, isLoggedIn, loading: authLoading, logout } = usePatientAuth();
@@ -27,6 +28,8 @@ const PatientDashboard = () => {
   const [showDueSoonModal, setShowDueSoonModal] = useState(false);
   const [showEditAppointmentModal, setShowEditAppointmentModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [reminders, setReminders] = useState([]);
+  const [vaccinations, setVaccinations] = useState([]);
 
   useEffect(() => {
     if (!authLoading && currentPatient) {
@@ -34,6 +37,13 @@ const PatientDashboard = () => {
       loadDoctors();
     }
   }, [authLoading, currentPatient]);
+
+  // Recalculate reminders when appointments or vaccinations change
+  useEffect(() => {
+    if (appointments.length > 0 || vaccinations.length > 0) {
+      calculateReminders();
+    }
+  }, [appointments, vaccinations]);
 
   // Separate useEffect for loading doctors when editing an appointment
   useEffect(() => {
@@ -68,11 +78,120 @@ const PatientDashboard = () => {
 
       if (appointmentsError) throw appointmentsError;
       setAppointments(appointmentsData || []);
+
+      // Load vaccinations for the current patient
+      await loadVaccinations();
     } catch (error) {
       // Error loading dashboard data
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadVaccinations = async () => {
+    if (!currentPatient) return;
+
+    try {
+      const { data: vaccinationsData, error } = await supabase
+        .from('vaccinations')
+        .select('*')
+        .eq('patient_id', currentPatient.id);
+
+      if (error) throw error;
+      setVaccinations(vaccinationsData || []);
+      
+      // Calculate reminders after loading vaccinations
+      calculateReminders();
+    } catch (error) {
+      console.error('Error loading vaccinations:', error);
+    }
+  };
+
+  const calculateReminders = () => {
+    if (!currentPatient || !currentPatient.dob) return;
+
+    const today = new Date();
+    const patientDOB = new Date(currentPatient.dob);
+    const patientAgeInMonths = (today.getFullYear() - patientDOB.getFullYear()) * 12 + 
+                              (today.getMonth() - patientDOB.getMonth());
+
+    const remindersList = [];
+
+    // Calculate vaccination reminders
+    IAP_SCHEDULE.forEach(schedule => {
+      const ageInMonths = getAgeInMonths(schedule.age);
+      if (ageInMonths <= patientAgeInMonths + 3 && ageInMonths >= patientAgeInMonths - 1) {
+        schedule.vaccines.forEach(vaccine => {
+          // Check if vaccine is already given
+          const isGiven = vaccinations.some(v => 
+            v.vaccine_name === vaccine && v.administered_date
+          );
+          
+          if (!isGiven) {
+            const dueDate = new Date(patientDOB);
+            dueDate.setMonth(dueDate.getMonth() + ageInMonths);
+            
+            const daysUntilDue = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+            
+            if (daysUntilDue <= 30 && daysUntilDue >= -7) {
+              remindersList.push({
+                id: `vaccine-${vaccine}`,
+                type: 'vaccination',
+                title: `${vaccine} Vaccination`,
+                description: `${vaccine} vaccine is due for your child`,
+                dueDate: dueDate,
+                daysUntilDue: daysUntilDue,
+                priority: daysUntilDue <= 7 ? 'high' : 'medium',
+                doctor: 'Pediatrician'
+              });
+            }
+          }
+        });
+      }
+    });
+
+    // Add appointment reminders
+    const upcomingAppointments = appointments.filter(apt => 
+      new Date(apt.date) > today && 
+      new Date(apt.date) <= new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
+    );
+
+    upcomingAppointments.forEach(appointment => {
+      const appointmentDate = new Date(appointment.date);
+      const daysUntilAppointment = Math.ceil((appointmentDate - today) / (1000 * 60 * 60 * 24));
+      
+      remindersList.push({
+        id: `appointment-${appointment.id}`,
+        type: 'appointment',
+        title: 'Upcoming Appointment',
+        description: `Appointment with ${appointment.user?.full_name || 'Doctor'} on ${formatDate(appointment.date)}`,
+        dueDate: appointmentDate,
+        daysUntilDue: daysUntilAppointment,
+        priority: daysUntilAppointment <= 1 ? 'high' : 'medium',
+        doctor: appointment.user?.full_name || 'Doctor'
+      });
+    });
+
+    setReminders(remindersList);
+  };
+
+  const getAgeInMonths = (ageString) => {
+    if (ageString === 'BIRTH') return 0;
+    if (ageString.includes('weeks')) {
+      const weeks = parseInt(ageString);
+      return Math.floor(weeks / 4.33);
+    }
+    if (ageString.includes('mo')) {
+      return parseInt(ageString.replace('mo', ''));
+    }
+    if (ageString.includes('yrs')) {
+      return parseInt(ageString.replace('yrs', '')) * 12;
+    }
+    if (ageString.includes('-')) {
+      const [min, max] = ageString.split('-');
+      return parseInt(min.replace('mo', '').replace('yrs', ''));
+    }
+    return 0;
   };
 
   const loadDoctors = async () => {
@@ -375,7 +494,9 @@ const PatientDashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-600 mb-1">Reminders</p>
-                    <p className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">3</p>
+                    <p className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                      {reminders.length}
+                    </p>
                   </div>
                   <div className="p-3 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl group-hover:scale-110 transition-transform duration-300">
                     <Bell className="h-6 w-6 text-white" />
@@ -391,7 +512,9 @@ const PatientDashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-600 mb-1">Due Soon</p>
-                    <p className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">2</p>
+                    <p className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
+                      {reminders.filter(reminder => reminder.priority === 'high' || reminder.daysUntilDue <= 0).length}
+                    </p>
                   </div>
                   <div className="p-3 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl group-hover:scale-110 transition-transform duration-300">
                     <AlertTriangle className="h-6 w-6 text-white" />
@@ -902,88 +1025,97 @@ const PatientDashboard = () => {
             </div>
 
             <div className="p-6">
-              <div className="space-y-4">
-                <div className="group bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-100 hover:border-purple-200 transition-all duration-300 hover:shadow-lg">
-                  <div className="flex items-center space-x-4">
-                    <div className="p-3 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl group-hover:scale-110 transition-transform duration-300">
-                      <Bell className="h-5 w-5 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-gray-800 group-hover:text-purple-600 transition-colors">
-                        Annual Check-up Due
-                      </h4>
-                      <p className="text-sm text-gray-600 mb-2">Your annual pediatric check-up is scheduled for next month</p>
-                      <div className="flex items-center space-x-4 text-xs text-gray-500">
-                        <span className="flex items-center">
-                          <Clock className="w-3 h-3 mr-1" />
-                          Due in 2 weeks
-                        </span>
-                        <span className="flex items-center">
-                          <User className="w-3 h-3 mr-1" />
-                          Dr. Sarah Johnson
-                        </span>
+              {reminders.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="w-20 h-20 bg-gradient-to-r from-purple-100 to-pink-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <Bell className="h-10 w-10 text-purple-500" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-800 mb-2">No Active Reminders</h3>
+                  <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                    You're all caught up! No pending vaccinations or appointments that need attention.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {reminders.map((reminder, index) => (
+                    <div 
+                      key={reminder.id}
+                      className={`group rounded-xl p-6 border transition-all duration-300 hover:shadow-lg ${
+                        reminder.priority === 'high' 
+                          ? 'bg-gradient-to-r from-red-50 to-orange-50 border-red-100 hover:border-red-200' 
+                          : reminder.type === 'vaccination'
+                          ? 'bg-gradient-to-r from-blue-50 to-cyan-50 border-blue-100 hover:border-blue-200'
+                          : 'bg-gradient-to-r from-purple-50 to-pink-50 border-purple-100 hover:border-purple-200'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-4">
+                        <div className={`p-3 rounded-xl group-hover:scale-110 transition-transform duration-300 ${
+                          reminder.priority === 'high'
+                            ? 'bg-gradient-to-r from-red-500 to-orange-500'
+                            : reminder.type === 'vaccination'
+                            ? 'bg-gradient-to-r from-blue-500 to-cyan-500'
+                            : 'bg-gradient-to-r from-purple-500 to-pink-500'
+                        }`}>
+                          {reminder.type === 'vaccination' ? (
+                            <Shield className="h-5 w-5 text-white" />
+                          ) : (
+                            <Bell className="h-5 w-5 text-white" />
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <h4 className={`font-semibold text-gray-800 group-hover:transition-colors ${
+                            reminder.priority === 'high'
+                              ? 'group-hover:text-red-600'
+                              : reminder.type === 'vaccination'
+                              ? 'group-hover:text-blue-600'
+                              : 'group-hover:text-purple-600'
+                          }`}>
+                            {reminder.title}
+                          </h4>
+                          <p className="text-sm text-gray-600 mb-2">{reminder.description}</p>
+                          <div className="flex items-center space-x-4 text-xs text-gray-500">
+                            <span className="flex items-center">
+                              <Clock className="w-3 h-3 mr-1" />
+                              {reminder.daysUntilDue === 0 
+                                ? 'Due today' 
+                                : reminder.daysUntilDue < 0 
+                                ? `Overdue by ${Math.abs(reminder.daysUntilDue)} days`
+                                : `Due in ${reminder.daysUntilDue} day${reminder.daysUntilDue === 1 ? '' : 's'}`
+                              }
+                            </span>
+                            <span className="flex items-center">
+                              <User className="w-3 h-3 mr-1" />
+                              {reminder.doctor}
+                            </span>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => {
+                            if (reminder.type === 'vaccination') {
+                              // Navigate to vaccination portal
+                              setActiveTab('vaccinations');
+                              setShowRemindersModal(false);
+                            } else {
+                              // Navigate to appointments
+                              setActiveTab('appointments');
+                              setShowRemindersModal(false);
+                            }
+                          }}
+                          className={`px-4 py-2 text-white rounded-lg transition-all duration-300 ${
+                            reminder.priority === 'high'
+                              ? 'bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600'
+                              : reminder.type === 'vaccination'
+                              ? 'bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600'
+                              : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600'
+                          }`}
+                        >
+                          {reminder.type === 'vaccination' ? 'Schedule Vaccination' : 'View Appointment'}
+                        </button>
                       </div>
                     </div>
-                    <button className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all duration-300">
-                      Schedule
-                    </button>
-                  </div>
+                  ))}
                 </div>
-
-                <div className="group bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-6 border border-blue-100 hover:border-blue-200 transition-all duration-300 hover:shadow-lg">
-                  <div className="flex items-center space-x-4">
-                    <div className="p-3 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl group-hover:scale-110 transition-transform duration-300">
-                      <Shield className="h-5 w-5 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-gray-800 group-hover:text-blue-600 transition-colors">
-                        Vaccination Reminder
-                      </h4>
-                      <p className="text-sm text-gray-600 mb-2">MMR vaccine booster is due for your child</p>
-                      <div className="flex items-center space-x-4 text-xs text-gray-500">
-                        <span className="flex items-center">
-                          <Clock className="w-3 h-3 mr-1" />
-                          Due in 1 week
-                        </span>
-                        <span className="flex items-center">
-                          <User className="w-3 h-3 mr-1" />
-                          Dr. Michael Chen
-                        </span>
-                      </div>
-                    </div>
-                    <button className="px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg hover:from-blue-600 hover:to-cyan-600 transition-all duration-300">
-                      Schedule
-                    </button>
-                  </div>
-                </div>
-
-                <div className="group bg-gradient-to-r from-orange-50 to-red-50 rounded-xl p-6 border border-orange-100 hover:border-orange-200 transition-all duration-300 hover:shadow-lg">
-                  <div className="flex items-center space-x-4">
-                    <div className="p-3 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl group-hover:scale-110 transition-transform duration-300">
-                      <Activity className="h-5 w-5 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-gray-800 group-hover:text-orange-600 transition-colors">
-                        Growth Monitoring
-                      </h4>
-                      <p className="text-sm text-gray-600 mb-2">Time for your child's growth and development assessment</p>
-                      <div className="flex items-center space-x-4 text-xs text-gray-500">
-                        <span className="flex items-center">
-                          <Clock className="w-3 h-3 mr-1" />
-                          Due in 3 weeks
-                        </span>
-                        <span className="flex items-center">
-                          <User className="w-3 h-3 mr-1" />
-                          Dr. Emily Rodriguez
-                        </span>
-                      </div>
-                    </div>
-                    <button className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:from-orange-600 hover:to-red-600 transition-all duration-300">
-                      Schedule
-                    </button>
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -1014,61 +1146,89 @@ const PatientDashboard = () => {
             </div>
 
             <div className="p-6">
-              <div className="space-y-4">
-                <div className="group bg-gradient-to-r from-red-50 to-orange-50 rounded-xl p-6 border border-red-100 hover:border-red-200 transition-all duration-300 hover:shadow-lg">
-                  <div className="flex items-center space-x-4">
-                    <div className="p-3 bg-gradient-to-r from-red-500 to-orange-500 rounded-xl group-hover:scale-110 transition-transform duration-300">
-                      <AlertTriangle className="h-5 w-5 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-gray-800 group-hover:text-red-600 transition-colors">
-                        Emergency Follow-up
-                      </h4>
-                      <p className="text-sm text-gray-600 mb-2">Follow-up appointment for recent emergency visit</p>
-                      <div className="flex items-center space-x-4 text-xs text-gray-500">
-                        <span className="flex items-center">
-                          <Clock className="w-3 h-3 mr-1" />
-                          Due tomorrow
-                        </span>
-                        <span className="flex items-center">
-                          <User className="w-3 h-3 mr-1" />
-                          Dr. Sarah Johnson
-                        </span>
-                      </div>
-                    </div>
-                    <button className="px-4 py-2 bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-lg hover:from-red-600 hover:to-orange-600 transition-all duration-300">
-                      Reschedule
-                    </button>
+              {reminders.filter(reminder => reminder.priority === 'high' || reminder.daysUntilDue <= 0).length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="w-20 h-20 bg-gradient-to-r from-green-100 to-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <CheckCircle className="h-10 w-10 text-green-500" />
                   </div>
+                  <h3 className="text-xl font-semibold text-gray-800 mb-2">No Urgent Items</h3>
+                  <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                    Great news! You don't have any urgent health items that need immediate attention.
+                  </p>
                 </div>
-
-                <div className="group bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl p-6 border border-yellow-100 hover:border-yellow-200 transition-all duration-300 hover:shadow-lg">
-                  <div className="flex items-center space-x-4">
-                    <div className="p-3 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-xl group-hover:scale-110 transition-transform duration-300">
-                      <Shield className="h-5 w-5 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-gray-800 group-hover:text-yellow-600 transition-colors">
-                        Vaccination Overdue
-                      </h4>
-                      <p className="text-sm text-gray-600 mb-2">DTaP vaccine is overdue by 1 week</p>
-                      <div className="flex items-center space-x-4 text-xs text-gray-500">
-                        <span className="flex items-center">
-                          <Clock className="w-3 h-3 mr-1" />
-                          Overdue by 1 week
-                        </span>
-                        <span className="flex items-center">
-                          <User className="w-3 h-3 mr-1" />
-                          Dr. Michael Chen
-                        </span>
+              ) : (
+                <div className="space-y-4">
+                  {reminders
+                    .filter(reminder => reminder.priority === 'high' || reminder.daysUntilDue <= 0)
+                    .map((reminder, index) => (
+                      <div 
+                        key={reminder.id}
+                        className={`group rounded-xl p-6 border transition-all duration-300 hover:shadow-lg ${
+                          reminder.priority === 'high' || reminder.daysUntilDue <= 0
+                            ? 'bg-gradient-to-r from-red-50 to-orange-50 border-red-100 hover:border-red-200'
+                            : 'bg-gradient-to-r from-yellow-50 to-orange-50 border-yellow-100 hover:border-yellow-200'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-4">
+                          <div className={`p-3 rounded-xl group-hover:scale-110 transition-transform duration-300 ${
+                            reminder.priority === 'high' || reminder.daysUntilDue <= 0
+                              ? 'bg-gradient-to-r from-red-500 to-orange-500'
+                              : 'bg-gradient-to-r from-yellow-500 to-orange-500'
+                          }`}>
+                            {reminder.type === 'vaccination' ? (
+                              <Shield className="h-5 w-5 text-white" />
+                            ) : (
+                              <AlertTriangle className="h-5 w-5 text-white" />
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <h4 className={`font-semibold text-gray-800 group-hover:transition-colors ${
+                              reminder.priority === 'high' || reminder.daysUntilDue <= 0
+                                ? 'group-hover:text-red-600'
+                                : 'group-hover:text-yellow-600'
+                            }`}>
+                              {reminder.title}
+                            </h4>
+                            <p className="text-sm text-gray-600 mb-2">{reminder.description}</p>
+                            <div className="flex items-center space-x-4 text-xs text-gray-500">
+                              <span className="flex items-center">
+                                <Clock className="w-3 h-3 mr-1" />
+                                {reminder.daysUntilDue === 0 
+                                  ? 'Due today' 
+                                  : reminder.daysUntilDue < 0 
+                                  ? `Overdue by ${Math.abs(reminder.daysUntilDue)} day${Math.abs(reminder.daysUntilDue) === 1 ? '' : 's'}`
+                                  : `Due in ${reminder.daysUntilDue} day${reminder.daysUntilDue === 1 ? '' : 's'}`
+                                }
+                              </span>
+                              <span className="flex items-center">
+                                <User className="w-3 h-3 mr-1" />
+                                {reminder.doctor}
+                              </span>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => {
+                              if (reminder.type === 'vaccination') {
+                                setActiveTab('vaccinations');
+                                setShowDueSoonModal(false);
+                              } else {
+                                setActiveTab('appointments');
+                                setShowDueSoonModal(false);
+                              }
+                            }}
+                            className={`px-4 py-2 text-white rounded-lg transition-all duration-300 ${
+                              reminder.priority === 'high' || reminder.daysUntilDue <= 0
+                                ? 'bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600'
+                                : 'bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600'
+                            }`}
+                          >
+                            {reminder.type === 'vaccination' ? 'Schedule Now' : 'Reschedule'}
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                    <button className="px-4 py-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-lg hover:from-yellow-600 hover:to-orange-600 transition-all duration-300">
-                      Schedule Now
-                    </button>
-                  </div>
+                    ))}
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>

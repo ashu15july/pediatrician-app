@@ -9,23 +9,24 @@ export function useSuperAdminAuth() {
 export function SuperAdminAuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
     // Check if there's a stored super admin user in localStorage
     const storedUser = localStorage.getItem('superAdminUser');
     if (storedUser) {
-      const user = JSON.parse(storedUser);
-      setCurrentUser(user);
+      try {
+        const user = JSON.parse(storedUser);
+        setCurrentUser(user);
+      } catch (err) {
+        // Invalid stored data, clear it
+        localStorage.removeItem('superAdminUser');
+      }
     }
     setLoading(false);
   }, []);
 
   const login = async (username, password) => {
     setLoading(true);
-    setError(null);
     try {
       const res = await fetch('/api/auth', {
         method: 'POST',
@@ -33,16 +34,24 @@ export function SuperAdminAuthProvider({ children }) {
         body: JSON.stringify({ action: 'login', email: username, password })
       });
       const userData = await res.json();
+      
       if (!res.ok || !userData.success) {
         throw new Error(userData.error || 'Login failed');
       }
-      setUser(userData.user);
-      setIsLoggedIn(true);
-      setError(null);
+      
+      // Check if user has super_admin role
+      if (userData.user.role !== 'super_admin') {
+        throw new Error('Access denied. You do not have super admin privileges.');
+      }
+      
+      // Store user data in localStorage
+      localStorage.setItem('superAdminUser', JSON.stringify(userData.user));
+      
+      setCurrentUser(userData.user);
       return { success: true };
     } catch (err) {
-      setError(err.message || 'Login failed');
-      return { success: false, error: err.message };
+      const errorMessage = err.message || 'Invalid username or password';
+      return { success: false, error: errorMessage };
     } finally {
       setLoading(false);
     }
@@ -52,7 +61,6 @@ export function SuperAdminAuthProvider({ children }) {
     // Clear user data
     localStorage.removeItem('superAdminUser');
     setCurrentUser(null);
-    setIsLoggedIn(false);
     
     // Super admin should redirect to the main domain (not a specific clinic)
     if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {

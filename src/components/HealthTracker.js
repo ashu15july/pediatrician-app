@@ -129,22 +129,65 @@ const HealthTracker = ({ patientId, patientName, patientAge, patientDOB, patient
     // Find the appropriate age group from milestones data
     const ageGroup = milestonesData.milestones.find(group => {
       const ageRange = group.ageRange;
+      
       if (ageRange.includes('-')) {
-        const [start, end] = ageRange.split('-').map(s => parseInt(s.split(' ')[0]));
-        return ageInMonths >= start && ageInMonths <= end;
+        const parts = ageRange.split('-');
+        const startPart = parts[0].trim();
+        const endPart = parts[1].trim();
+        
+        // Parse start age
+        let startMonths = 0;
+        if (startPart.includes('month')) {
+          startMonths = parseInt(startPart.split(' ')[0]) || 0;
+        } else if (startPart.includes('year')) {
+          startMonths = parseInt(startPart.split(' ')[0]) * 12 || 0;
+        } else {
+          // Assume months if no unit specified
+          startMonths = parseInt(startPart) || 0;
+        }
+        
+        // Parse end age
+        let endMonths = 0;
+        if (endPart.includes('month')) {
+          endMonths = parseInt(endPart.split(' ')[0]) || 0;
+        } else if (endPart.includes('year')) {
+          endMonths = parseInt(endPart.split(' ')[0]) * 12 || 0;
+        } else {
+          // Assume months if no unit specified
+          endMonths = parseInt(endPart) || 0;
+        }
+        
+        const isInRange = ageInMonths >= startMonths && ageInMonths <= endMonths;
+        return isInRange;
       } else {
-        const singleAge = parseInt(ageRange.split(' ')[0]);
-        return ageInMonths === singleAge;
+        // Handle single age like "5 years"
+        const agePart = ageRange.trim();
+        let singleAgeMonths = 0;
+        
+        if (agePart.includes('month')) {
+          singleAgeMonths = parseInt(agePart.split(' ')[0]) || 0;
+        } else if (agePart.includes('year')) {
+          singleAgeMonths = parseInt(agePart.split(' ')[0]) * 12 || 0;
+        } else {
+          singleAgeMonths = parseInt(agePart) || 0;
+        }
+        
+        const isMatch = ageInMonths === singleAgeMonths;
+        return isMatch;
       }
     });
     
-    if (!ageGroup) return [];
+    if (!ageGroup) {
+      return [];
+    }
     
-    return [
+    const result = [
       { category: 'Cognitive', items: ageGroup.cognitive || [] },
       { category: 'Motor Skills', items: [...(ageGroup.grossMotor || []), ...(ageGroup.fineMotor || [])] },
       { category: 'Social & Communication', items: ageGroup.communicationSocial || [] }
     ];
+    
+    return result;
   };
 
   const getNutritionByAge = (ageInMonths) => {
@@ -189,27 +232,35 @@ const HealthTracker = ({ patientId, patientName, patientAge, patientDOB, patient
         ...formData
       };
 
-      // Add date fields for compatibility with both old and new table structures
+      // Add appropriate date fields based on record type
       const currentDate = new Date().toISOString().split('T')[0];
-      recordData.date = currentDate;
-      recordData.record_date = currentDate;
+      
+      if (modalType === 'milestone') {
+        // For milestones, use achieved_date
+        recordData.achieved_date = formData.achieved_date || currentDate;
+      } else {
+        // For growth records, use both date and record_date for compatibility
+        recordData.date = currentDate;
+        recordData.record_date = currentDate;
+      }
 
-      // Map old column names to new ones if needed
-      if (formData.height_cm) {
-        recordData.height = formData.height_cm; // Old column name
-        recordData.height_cm = formData.height_cm; // New column name
-      }
-      if (formData.weight_kg) {
-        recordData.weight = formData.weight_kg; // Old column name
-        recordData.weight_kg = formData.weight_kg; // New column name
-      }
-      if (formData.head_circumference_cm) {
-        recordData.head_circumference = formData.head_circumference_cm; // Old column name
-        recordData.head_circumference_cm = formData.head_circumference_cm; // New column name
+      // Map old column names to new ones if needed (only for growth records)
+      if (modalType === 'growth') {
+        if (formData.height_cm) {
+          recordData.height = formData.height_cm; // Old column name
+          recordData.height_cm = formData.height_cm; // New column name
+        }
+        if (formData.weight_kg) {
+          recordData.weight = formData.weight_kg; // Old column name
+          recordData.weight_kg = formData.weight_kg; // New column name
+        }
+        if (formData.head_circumference_cm) {
+          recordData.head_circumference = formData.head_circumference_cm; // Old column name
+          recordData.head_circumference_cm = formData.head_circumference_cm; // New column name
+        }
       }
 
       // Saving record data
-
       const { data, error } = await supabase
         .from(tableName)
         .insert([recordData]);

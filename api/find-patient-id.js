@@ -21,13 +21,27 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // Find patient by guardian information
+    // First, try to find the clinic by ID
+    const { data: clinic, error: clinicError } = await supabase
+      .from('clinics')
+      .select('id, name')
+      .eq('id', clinicId)
+      .single();
+
+    if (clinicError || !clinic) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Clinic not found' 
+      });
+    }
+
+    // Find patient by guardian information - using exact field names from database
     const { data: patients, error } = await supabase
       .from('patients')
-      .select('id, patient_id, name, guardian_name, guardian_phone')
-      .eq('name', patientName)
-      .eq('guardian_name', guardianName)
-      .eq('guardian_phone', guardianPhone)
+      .select('id, patient_id, name, guardian_name, guardian_phone, clinic_id')
+      .eq('name', patientName.trim())
+      .eq('guardian_name', guardianName.trim())
+      .eq('guardian_phone', guardianPhone.trim())
       .eq('clinic_id', clinicId);
 
     if (error) {
@@ -36,16 +50,41 @@ module.exports = async function handler(req, res) {
     }
 
     if (patients && patients.length > 0) {
+      const patient = patients[0];
       return res.status(200).json({ 
         success: true, 
-        patientId: patients[0].patient_id,
-        patientName: patients[0].name,
-        guardianPhone: patients[0].guardian_phone
+        patientId: patient.patient_id,
+        patientName: patient.name,
+        guardianPhone: patient.guardian_phone
       });
     } else {
+      // Try a more flexible search (case-insensitive, partial matches)
+      const { data: flexiblePatients, error: flexibleError } = await supabase
+        .from('patients')
+        .select('id, patient_id, name, guardian_name, guardian_phone, clinic_id')
+        .eq('clinic_id', clinicId)
+        .ilike('name', `%${patientName.trim()}%`)
+        .ilike('guardian_name', `%${guardianName.trim()}%`)
+        .ilike('guardian_phone', `%${guardianPhone.trim()}%`);
+
+      if (flexibleError) {
+        console.error('Flexible search error:', flexibleError);
+        return res.status(500).json({ error: 'Database error occurred during flexible search' });
+      }
+
+      if (flexiblePatients && flexiblePatients.length > 0) {
+        const patient = flexiblePatients[0];
+        return res.status(200).json({ 
+          success: true, 
+          patientId: patient.patient_id,
+          patientName: patient.name,
+          guardianPhone: patient.guardian_phone
+        });
+      }
+
       return res.status(404).json({ 
         success: false, 
-        error: 'No patient found with the provided information' 
+        error: 'No patient found with the provided information. Please check your details or contact the clinic.' 
       });
     }
 
