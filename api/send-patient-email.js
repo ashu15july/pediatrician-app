@@ -49,6 +49,67 @@ function getTextBlockHeight(doc, text, options) {
   return doc.heightOfString(text, options);
 }
 
+// Helper function to parse and format AI response
+const formatAIResponse = (aiResponse) => {
+  if (!aiResponse) return '';
+  
+  try {
+    // Try to parse as JSON first
+    const parsed = JSON.parse(aiResponse);
+    
+    // If it's an object, format it nicely
+    if (typeof parsed === 'object') {
+      // Check for common AI response structures
+      if (parsed.assessment) {
+        return parsed.assessment;
+      } else if (parsed.recommendations) {
+        return parsed.recommendations;
+      } else if (parsed.summary) {
+        return parsed.summary;
+      } else if (parsed.diagnosis) {
+        return parsed.diagnosis;
+      } else if (parsed.treatment) {
+        return parsed.treatment;
+      } else if (parsed.notes) {
+        return parsed.notes;
+      } else if (parsed.comment) {
+        return parsed.comment;
+      } else if (parsed.text) {
+        return parsed.text;
+      } else if (parsed.content) {
+        return parsed.content;
+      } else if (parsed.message) {
+        return parsed.message;
+      } else if (Array.isArray(parsed)) {
+        // If it's an array, join the items
+        return parsed.map(item => 
+          typeof item === 'object' ? JSON.stringify(item) : String(item)
+        ).join('\n');
+      } else {
+        // If it's a complex object, try to extract meaningful content
+        const meaningfulKeys = Object.keys(parsed).filter(key => 
+          typeof parsed[key] === 'string' && parsed[key].length > 10
+        );
+        
+        if (meaningfulKeys.length > 0) {
+          return meaningfulKeys.map(key => 
+            `${key.charAt(0).toUpperCase() + key.slice(1)}: ${parsed[key]}`
+          ).join('\n\n');
+        } else {
+          // Fallback to formatted JSON
+          return JSON.stringify(parsed, null, 2);
+        }
+      }
+    }
+    
+    // If it's a string after parsing, return it
+    return parsed;
+  } catch (error) {
+    // If it's not JSON, return as is
+    return aiResponse;
+  }
+};
+
 // Color palette for modern design
 const colors = {
   primary: '#2563eb',
@@ -380,8 +441,9 @@ function drawVisitNoteCard(doc, note, patient, clinic, index, x = 40, y = doc.y,
     doc.text('AI Assessment', contentX, contentY);
     
     doc.fontSize(11).fillColor('#374151').font('Helvetica-Oblique');
-    const aiHeight = doc.heightOfString(note.ai_response, { width: width - 40 });
-    doc.text(note.ai_response, contentX, contentY + 15, { width: width - 40 });
+    const formattedAIResponse = formatAIResponse(note.ai_response);
+    const aiHeight = doc.heightOfString(formattedAIResponse, { width: width - 40 });
+    doc.text(formattedAIResponse, contentX, contentY + 15, { width: width - 40 });
     contentY += aiHeight + 20;
   }
   

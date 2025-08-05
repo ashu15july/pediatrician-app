@@ -172,6 +172,67 @@ const normalizeVisitType = (type) => {
   }
 };
 
+// Helper function to parse and format AI response
+const formatAIResponse = (aiResponse) => {
+  if (!aiResponse) return '';
+  
+  try {
+    // Try to parse as JSON first
+    const parsed = JSON.parse(aiResponse);
+    
+    // If it's an object, format it nicely
+    if (typeof parsed === 'object') {
+      // Check for common AI response structures
+      if (parsed.assessment) {
+        return parsed.assessment;
+      } else if (parsed.recommendations) {
+        return parsed.recommendations;
+      } else if (parsed.summary) {
+        return parsed.summary;
+      } else if (parsed.diagnosis) {
+        return parsed.diagnosis;
+      } else if (parsed.treatment) {
+        return parsed.treatment;
+      } else if (parsed.notes) {
+        return parsed.notes;
+      } else if (parsed.comment) {
+        return parsed.comment;
+      } else if (parsed.text) {
+        return parsed.text;
+      } else if (parsed.content) {
+        return parsed.content;
+      } else if (parsed.message) {
+        return parsed.message;
+      } else if (Array.isArray(parsed)) {
+        // If it's an array, join the items
+        return parsed.map(item => 
+          typeof item === 'object' ? JSON.stringify(item) : String(item)
+        ).join('\n');
+      } else {
+        // If it's a complex object, try to extract meaningful content
+        const meaningfulKeys = Object.keys(parsed).filter(key => 
+          typeof parsed[key] === 'string' && parsed[key].length > 10
+        );
+        
+        if (meaningfulKeys.length > 0) {
+          return meaningfulKeys.map(key => 
+            `${key.charAt(0).toUpperCase() + key.slice(1)}: ${parsed[key]}`
+          ).join('\n\n');
+        } else {
+          // Fallback to formatted JSON
+          return JSON.stringify(parsed, null, 2);
+        }
+      }
+    }
+    
+    // If it's a string after parsing, return it
+    return parsed;
+  } catch (error) {
+    // If it's not JSON, return as is
+    return aiResponse;
+  }
+};
+
 const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled, onUpdate, onDelete }) => {
   // Determine which permission function to use
   const { hasPermission: authHasPermission, currentUser: authUser } = useAuth();
@@ -462,44 +523,53 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
     const validated = { ...values };
     const warnings = { ...vitalWarnings };
     
-    // Height: 40-200 cm
+    // Height: > 0 cm (matches database constraint)
     if (values.height) {
       const height = parseFloat(values.height);
-      if (height < 40 || height > 200) {
-        warnings.height = 'Height should be between 40 and 200 cm';
+      if (height <= 0) {
+        warnings.height = 'Height must be greater than 0 cm';
+      } else if (height < 40 || height > 200) {
+        warnings.height = 'Height should be between 40 and 200 cm for pediatric patients';
       } else {
         warnings.height = '';
       }
       validated.height = height;
     }
     
-    // Weight: 1-16 kg
+    // Weight: > 0 kg (matches database constraint)
     if (values.weight) {
       const weight = parseFloat(values.weight);
-      if (weight < 1 || weight > 16) {
-        warnings.weight = 'Weight should be between 1 and 16 kg';
+      if (weight <= 0) {
+        warnings.weight = 'Weight must be greater than 0 kg';
+      } else if (weight < 1 || weight > 50) {
+        warnings.weight = 'Weight should be between 1 and 50 kg for pediatric patients';
       } else {
         warnings.weight = '';
       }
       validated.weight = weight;
     }
     
-    // Temperature: 90-110 °F
+    // Temperature: 90-120 °F (database now supports higher values)
     if (values.temperature) {
       const temp = parseFloat(values.temperature);
-      if (temp < 90 || temp > 110) {
-        warnings.temperature = 'Temperature should be between 90 and 110 °F';
+      if (temp < 90 || temp > 120) {
+        warnings.temperature = 'Temperature should be between 90 and 120 °F';
+      } else if (temp < 95 || temp > 110) {
+        warnings.temperature = 'Temperature should be between 95 and 110 °F for medical accuracy';
       } else {
         warnings.temperature = '';
       }
+      // Store as Fahrenheit since database expects Fahrenheit
       validated.temperature = temp;
     }
     
-    // Heart Rate: 70-200 bpm
+    // Heart Rate: 0-250 bpm (matches database constraint)
     if (values.heartRate) {
       const hr = parseInt(values.heartRate);
-      if (hr < 70 || hr > 200) {
-        warnings.heartRate = 'Heart rate should be between 70 and 200 bpm';
+      if (hr < 0 || hr > 250) {
+        warnings.heartRate = 'Heart rate should be between 0 and 250 bpm';
+      } else if (hr < 70 || hr > 200) {
+        warnings.heartRate = 'Heart rate should be between 70 and 200 bpm for medical accuracy';
       } else {
         warnings.heartRate = '';
       }
@@ -536,13 +606,11 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
     return validated;
   };
 
+
+
   const handleVitalChange = (field, value) => {
     const validatedValue = validateVitals({ [field]: value })[field];
     setVitals(prev => ({ ...prev, [field]: value }));
-  };
-
-  const fahrenheitToCelsius = (fahrenheit) => {
-    return ((fahrenheit - 32) * 5) / 9;
   };
 
   const handleAddNote = async (e) => {
@@ -577,6 +645,11 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
     try {
       setError(null);
       const validatedVitals = validateVitals(vitals);
+      
+      // Debug logging
+      console.log('Validated vitals:', validatedVitals);
+      console.log('Original vitals:', vitals);
+      
       const noteData = {
         patient_id: patient.id,
         user_id: activeUser.id, // was doctor_id
@@ -590,12 +663,12 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
         diagnosis: diagnosis,
         treatment_plan: treatmentPlan,
         vitals: {
-          height: validatedVitals.height || null,
-          weight: validatedVitals.weight || null,
-          temperature: validatedVitals.temperature || null,
-          heart_rate: validatedVitals.heartRate || null,
-          blood_pressure: vitals.bloodPressure || null,
-          head_circumference: validatedVitals.headCircumference || null
+          height: validatedVitals.height && validatedVitals.height !== '' ? validatedVitals.height : null,
+          weight: validatedVitals.weight && validatedVitals.weight !== '' ? validatedVitals.weight : null,
+          temperature: validatedVitals.temperature && validatedVitals.temperature !== '' ? validatedVitals.temperature : null,
+          heart_rate: validatedVitals.heartRate && validatedVitals.heartRate !== '' ? validatedVitals.heartRate : null,
+          blood_pressure: vitals.bloodPressure && vitals.bloodPressure !== '' ? vitals.bloodPressure : null,
+          head_circumference: validatedVitals.headCircumference && validatedVitals.headCircumference !== '' ? validatedVitals.headCircumference : null
         },
         development_milestones: milestoneStatus,
         ai_response: aiDraft || null,
@@ -606,7 +679,26 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
         noteData.follow_up_notes = followUpNotes;
       }
 
-      await addVisitNote(noteData);
+      const visitNote = await addVisitNote(noteData);
+      
+      // Check if vitals were saved successfully
+      if (noteData.vitals && Object.values(noteData.vitals).some(v => v !== null && v !== '')) {
+        // Try to fetch the vitals to confirm they were saved
+        try {
+          const { data: savedVitals, error: vitalsFetchError } = await supabase
+            .from('visit_notes_vitals')
+            .select('*')
+            .eq('visit_note_id', visitNote.id)
+            .single();
+          
+          if (vitalsFetchError || !savedVitals) {
+            console.warn('Vitals may not have been saved successfully');
+            setError('Visit note saved successfully, but vital measurements may not have been recorded. Please check the vitals section.');
+          }
+        } catch (fetchError) {
+          console.warn('Could not verify vitals were saved:', fetchError);
+        }
+      }
       
       // Debug log for appointment_id
       // handleAddNote: patient.appointment_id
@@ -624,20 +716,27 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
       
       // Auto-create follow-up appointment if followUpDate is filled
       if (followUpDate) {
-        const { error: apptError } = await supabase.from('appointments').insert([
-          {
-            patient_id: patient.id,
-            doctor_id: activeUser.id,
-            date: followUpDate,
-            time: '09:00', // default time, can be changed
-            status: 'scheduled',
-            type: 'followup',
-            reason: 'Follow-up',
-            notes: followUpNotes || null,
-            created_by: activeUser.id,
-            created_at: new Date().toISOString()
+        try {
+          const { error: apptError } = await supabase.from('appointments').insert([
+            {
+              patient_id: patient.id,
+              doctor_id: activeUser.id,
+              date: followUpDate,
+              time: '09:00', // default time, can be changed
+              status: 'scheduled',
+              type: 'followup',
+              reason: 'Follow-up',
+              notes: followUpNotes || null,
+              created_by: activeUser.id,
+              created_at: new Date().toISOString()
+            }
+          ]);
+          if (apptError) {
+            console.error('Error creating follow-up appointment:', apptError);
           }
-        ]);
+        } catch (apptInsertError) {
+          console.error('Failed to create follow-up appointment:', apptInsertError);
+        }
         // Optionally handle apptError
         // Send appointment confirmation email if patient has email
         if (patient.guardian_email) {
@@ -707,13 +806,26 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
       
       await loadNotes();
       
+      // Show success message
+      setError(null); // Clear any previous errors
+      
       // Refresh appointments to show updated status and new follow-up
       if (onAppointmentScheduled) {
         await onAppointmentScheduled();
       }
     } catch (err) {
       console.error('Error adding note:', err);
-      setError('Failed to add note. Please try again.');
+      
+      // Provide more specific error messages
+      if (err.message.includes('numeric field overflow')) {
+        setError('One or more vital measurements contain invalid values. Please check your inputs and try again.');
+      } else if (err.message.includes('out of range')) {
+        setError(err.message);
+      } else if (err.message.includes('too large')) {
+        setError('One or more measurements are too large. Please check your inputs.');
+      } else {
+        setError('Failed to add note. Please try again.');
+      }
     } finally {
       setSavingNote(false);
     }
@@ -1840,8 +1952,13 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
                           {/* Removed Send to Telegram and WhatsApp buttons */}
                           {note.ai_response && (
                             <div className="mt-3">
-                              <h4 className="text-sm font-semibold text-blue-700 flex items-center gap-2">AI Assessment</h4>
-                              <p className="text-gray-800 whitespace-pre-line bg-blue-50 rounded p-2 border border-blue-200 mt-1">{note.ai_response}</p>
+                              <h4 className="text-sm font-semibold text-blue-700 flex items-center gap-2 mb-2">
+                                <Check className="w-4 h-4 text-blue-500" />
+                                AI Assessment
+                              </h4>
+                              <div className="text-gray-700 text-sm leading-relaxed whitespace-pre-line bg-blue-50 rounded p-3 border border-blue-200">
+                                {formatAIResponse(note.ai_response)}
+                              </div>
                             </div>
                           )}
                           {/* Inside the previous visit notes rendering, after vitals and before follow-up ... */}

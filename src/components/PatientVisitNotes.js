@@ -1,6 +1,67 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Calendar, User, Heart, AlertTriangle, Check } from 'lucide-react';
+import { Calendar, User, AlertTriangle, Check, Heart, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+
+// Helper function to parse and format AI response
+const formatAIResponse = (aiResponse) => {
+  if (!aiResponse) return '';
+  
+  try {
+    // Try to parse as JSON first
+    const parsed = JSON.parse(aiResponse);
+    
+    // If it's an object, format it nicely
+    if (typeof parsed === 'object') {
+      // Check for common AI response structures
+      if (parsed.assessment) {
+        return parsed.assessment;
+      } else if (parsed.recommendations) {
+        return parsed.recommendations;
+      } else if (parsed.summary) {
+        return parsed.summary;
+      } else if (parsed.diagnosis) {
+        return parsed.diagnosis;
+      } else if (parsed.treatment) {
+        return parsed.treatment;
+      } else if (parsed.notes) {
+        return parsed.notes;
+      } else if (parsed.comment) {
+        return parsed.comment;
+      } else if (parsed.text) {
+        return parsed.text;
+      } else if (parsed.content) {
+        return parsed.content;
+      } else if (parsed.message) {
+        return parsed.message;
+      } else if (Array.isArray(parsed)) {
+        // If it's an array, join the items
+        return parsed.map(item => 
+          typeof item === 'object' ? JSON.stringify(item) : String(item)
+        ).join('\n');
+      } else {
+        // If it's a complex object, try to extract meaningful content
+        const meaningfulKeys = Object.keys(parsed).filter(key => 
+          typeof parsed[key] === 'string' && parsed[key].length > 10
+        );
+        
+        if (meaningfulKeys.length > 0) {
+          return meaningfulKeys.map(key => 
+            `${key.charAt(0).toUpperCase() + key.slice(1)}: ${parsed[key]}`
+          ).join('\n\n');
+        } else {
+          // Fallback to formatted JSON
+          return JSON.stringify(parsed, null, 2);
+        }
+      }
+    }
+    
+    // If it's a string after parsing, return it
+    return parsed;
+  } catch (error) {
+    // If it's not JSON, return as is
+    return aiResponse;
+  }
+};
 
 const PatientVisitNotes = ({ patientId }) => {
   const [notes, setNotes] = useState([]);
@@ -251,12 +312,14 @@ const PatientVisitNotes = ({ patientId }) => {
 
             {/* AI Response */}
             {note.ai_response && (
-              <div className="mt-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
-                <h4 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
+              <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
                   <Check className="w-4 h-4 text-blue-500" />
                   AI Assessment
                 </h4>
-                <p className="text-gray-600 text-sm">{note.ai_response}</p>
+                <div className="text-gray-700 text-sm leading-relaxed whitespace-pre-line bg-white p-3 rounded border border-blue-100">
+                  {formatAIResponse(note.ai_response)}
+                </div>
               </div>
             )}
           </div>
