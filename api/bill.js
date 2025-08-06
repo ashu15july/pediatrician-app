@@ -15,32 +15,46 @@ function generateBillPDF({ bill, patient, doctor, clinic }) {
   const doc = new PDFDocument({ margin: 0, size: 'A4' });
   const pageWidth = doc.page.width;
   let y = 0;
+  
+  // Ensure all objects exist and have default values
+  const safeClinic = clinic || {};
+  const safeDoctor = doctor || {};
+  const safePatient = patient || {};
+  const safeBill = bill || { items: [] };
+  
   // Header background
   doc.rect(0, 0, pageWidth, 110).fill('#374151');
+  
   // Logo
-  if (clinic.logo) {
+  if (safeClinic.logo) {
     try {
-      doc.image(clinic.logo, 32, 24, { width: 48, height: 48 });
-    } catch (e) {}
+      doc.image(safeClinic.logo, 32, 24, { width: 48, height: 48 });
+    } catch (e) {
+      // Fallback to default logo if image fails to load
+      doc.circle(56, 48, 24).fill('#fff').stroke('#e5e7eb');
+      doc.fontSize(28).fillColor('#374151').font('Helvetica-Bold').text('🧾', 40, 32, { width: 32, align: 'center' });
+    }
   } else {
     doc.circle(56, 48, 24).fill('#fff').stroke('#e5e7eb');
     doc.fontSize(28).fillColor('#374151').font('Helvetica-Bold').text('🧾', 40, 32, { width: 32, align: 'center' });
   }
+  
   // Clinic name and address
-  doc.fontSize(22).fillColor('#fff').font('Helvetica-Bold').text(clinic.name || 'Clinic Name', 90, 32, { continued: false });
-  doc.fontSize(10).fillColor('#e5e7eb').font('Helvetica').text(clinic.address || '', 90, 60, { width: 350 });
-  doc.text(clinic.phone || '', 90, 75);
+  doc.fontSize(22).fillColor('#fff').font('Helvetica-Bold').text(safeClinic.name || 'Clinic Name', 90, 32, { continued: false });
+  doc.fontSize(10).fillColor('#e5e7eb').font('Helvetica').text(safeClinic.address || '', 90, 60, { width: 350 });
+  doc.text(safeClinic.phone || '', 90, 75);
+  
   // Doctor info (right side)
-  doc.fontSize(12).fillColor('#fff').font('Helvetica-Bold').text(doctor.full_name || '', pageWidth - 220, 32, { width: 200, align: 'right' });
-  doc.fontSize(10).fillColor('#e5e7eb').font('Helvetica').text(doctor.qualification || '', pageWidth - 220, 50, { width: 200, align: 'right' });
-  doc.text(doctor.specialization || '', pageWidth - 220, 65, { width: 200, align: 'right' });
+  doc.fontSize(12).fillColor('#fff').font('Helvetica-Bold').text(safeDoctor.full_name || 'Dr. Name', pageWidth - 220, 32, { width: 200, align: 'right' });
+  doc.fontSize(10).fillColor('#e5e7eb').font('Helvetica').text(safeDoctor.qualification || '', pageWidth - 220, 50, { width: 200, align: 'right' });
+  doc.text(safeDoctor.specialization || '', pageWidth - 220, 65, { width: 200, align: 'right' });
   y = 120;
   // Visit date, patient info, bill number
   doc.fontSize(11).fillColor('#111827').font('Helvetica-Bold').text('Visit Date:', 40, y);
-  doc.font('Helvetica').fillColor('#374151').text(formatDate(bill.created_at), 120, y);
+  doc.font('Helvetica').fillColor('#374151').text(formatDate(safeBill.created_at), 120, y);
   y += 20;
   doc.font('Helvetica-Bold').fillColor('#111827').text('Billed To:', 40, y);
-  doc.font('Helvetica').fillColor('#374151').text(`${patient.name} | ${patient.gender} | ${patient.age || ''} | ${patient.phone || patient.guardian_phone || ''} | ${patient.patient_code || ''}`, 120, y);
+  doc.font('Helvetica').fillColor('#374151').text(`${safePatient.name || 'Patient Name'} | ${safePatient.gender || ''} | ${safePatient.age || ''} | ${safePatient.phone || safePatient.guardian_phone || ''} | ${safePatient.patient_code || ''}`, 120, y);
   y += 30;
   // Table header
   doc.moveTo(40, y).lineTo(pageWidth - 40, y).strokeColor('#e5e7eb').lineWidth(1).stroke();
@@ -59,19 +73,30 @@ function generateBillPDF({ bill, patient, doctor, clinic }) {
   // Table rows
   doc.font('Helvetica').fillColor('#111827').fontSize(9);
   let subTotal = 0;
-  bill.items.forEach((item, idx) => {
-    const amount = Number(item.unitPrice ?? 0) * Number(item.quantity ?? 0);
-    const discount = Number(item.discount ?? 0);
-    const total = amount - discount;
-    subTotal += total;
-    doc.text(String(idx + 1).padStart(2, '0'), x0, y, { width: 36 });
-    doc.text(item.description || '', x1, y, { width: 170 });
-    doc.text(String(item.quantity ?? 0).padStart(2, '0'), x2, y, { width: 36, align: 'center' });
-    doc.text(`Rs. ${Number(item.unitPrice ?? 0).toFixed(0)}`, x3, y, { width: 70, align: 'right' });
-    doc.text(`${discount}`, x4, y, { width: 60, align: 'right' });
-    doc.text(`Rs. ${total.toFixed(0)}`, x5, y, { width: 60, align: 'right' });
+  
+  // Ensure items is an array and handle empty case
+  const items = Array.isArray(safeBill.items) ? safeBill.items : [];
+  
+  if (items.length === 0) {
+    // Show a message if no items
+    doc.text('No items', x1, y, { width: 170 });
     y += 18;
-  });
+  } else {
+    items.forEach((item, idx) => {
+      const safeItem = item || {};
+      const amount = Number(safeItem.unitPrice ?? safeItem.unit_price ?? 0) * Number(safeItem.quantity ?? 0);
+      const discount = Number(safeItem.discount ?? 0);
+      const total = amount - discount;
+      subTotal += total;
+      doc.text(String(idx + 1).padStart(2, '0'), x0, y, { width: 36 });
+      doc.text(safeItem.description || 'Service', x1, y, { width: 170 });
+      doc.text(String(safeItem.quantity ?? 0).padStart(2, '0'), x2, y, { width: 36, align: 'center' });
+      doc.text(`Rs. ${Number(safeItem.unitPrice ?? safeItem.unit_price ?? 0).toFixed(0)}`, x3, y, { width: 70, align: 'right' });
+      doc.text(`${discount}`, x4, y, { width: 60, align: 'right' });
+      doc.text(`Rs. ${total.toFixed(0)}`, x5, y, { width: 60, align: 'right' });
+      y += 18;
+    });
+  }
   // Sub-total
   doc.font('Helvetica').fillColor('#374151').fontSize(9);
   doc.text('Sub-Total', x1, y, { width: 170 });
@@ -103,6 +128,10 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { action } = req.body;
+
+  if (!action) {
+    return res.status(400).json({ error: 'Action is required' });
+  }
 
   try {
     if (action === 'save') {
@@ -171,10 +200,18 @@ module.exports = async function handler(req, res) {
       }
       // Fetch bill, patient, doctor, clinic
       const { data: bill, error: billError } = await supabase.from('bills').select('*').eq('id', billId).single();
-      if (billError || !bill) return res.status(404).json({ error: 'Bill not found' });
+      if (billError) {
+        console.error('Bill fetch error:', billError);
+        return res.status(404).json({ error: 'Bill not found' });
+      }
+      if (!bill) return res.status(404).json({ error: 'Bill not found' });
+      
       // Fetch bill items
       const { data: billItems, error: billItemsError } = await supabase.from('bill_items').select('*').eq('bill_id', billId);
-      if (billItemsError) return res.status(404).json({ error: 'Bill items not found' });
+      if (billItemsError) {
+        console.error('Bill items fetch error:', billItemsError);
+        return res.status(404).json({ error: 'Bill items not found' });
+      }
       bill.items = billItems.map(item => ({
         type: item.type || '',
         description: item.description || '',
@@ -183,20 +220,40 @@ module.exports = async function handler(req, res) {
         total: item.total ?? 0,
       }));
       const { data: patient, error: patientError } = await supabase.from('patients').select('*').eq('id', bill.patient_id).single();
-      if (patientError || !patient) return res.status(404).json({ error: 'Patient not found' });
+      if (patientError) {
+        console.error('Patient fetch error:', patientError);
+        return res.status(404).json({ error: 'Patient not found' });
+      }
+      if (!patient) return res.status(404).json({ error: 'Patient not found' });
+      
       const { data: doctor, error: doctorError } = await supabase.from('users').select('*').eq('id', bill.doctor_id).single();
-      if (doctorError || !doctor) return res.status(404).json({ error: 'Doctor not found' });
+      if (doctorError) {
+        console.error('Doctor fetch error:', doctorError);
+        return res.status(404).json({ error: 'Doctor not found' });
+      }
+      if (!doctor) return res.status(404).json({ error: 'Doctor not found' });
+      
       const { data: clinic, error: clinicError } = await supabase.from('clinics').select('*').eq('id', bill.clinic_id).single();
-      if (clinicError || !clinic) return res.status(404).json({ error: 'Clinic not found' });
+      if (clinicError) {
+        console.error('Clinic fetch error:', clinicError);
+        return res.status(404).json({ error: 'Clinic not found' });
+      }
+      if (!clinic) return res.status(404).json({ error: 'Clinic not found' });
       // Generate PDF
-      const pdfDoc = generateBillPDF({ bill, patient, doctor, clinic });
-      const pdfBuffer = await streamToBuffer(pdfDoc);
-      if (!pdfBuffer || pdfBuffer.length === 0) {
-        throw new Error('Generated PDF buffer is empty');
+      let pdfBuffer;
+      try {
+        const pdfDoc = generateBillPDF({ bill, patient, doctor, clinic });
+        pdfBuffer = await streamToBuffer(pdfDoc);
+        if (!pdfBuffer || pdfBuffer.length === 0) {
+          throw new Error('Generated PDF buffer is empty');
+        }
+      } catch (pdfError) {
+        console.error('PDF Generation Error:', pdfError);
+        throw new Error(`Failed to generate PDF: ${pdfError.message}`);
       }
       // Send email
-      const subject = `Bill for ${patient.name} - ${clinic.name}`;
-      const emailBody = `Hi,\n\nPlease find attached the bill for your recent visit.\n\nRegards,\n${clinic.name}`;
+      const subject = `Bill for ${patient.name || 'Patient'} - ${clinic.name || 'Clinic'}`;
+      const emailBody = `Hi,\n\nPlease find attached the bill for your recent visit.\n\nRegards,\n${clinic.name || 'Clinic'}`;
       const result = await emailService.sendEmail(
         email,
         subject,
@@ -204,7 +261,7 @@ module.exports = async function handler(req, res) {
         [
           {
             content: pdfBuffer.toString('base64'),
-            filename: `Bill_${patient.name.replace(/ /g, '_')}.pdf`,
+            filename: `Bill_${(patient.name || 'Patient').replace(/ /g, '_')}.pdf`,
             type: 'application/pdf',
             disposition: 'attachment',
           }
@@ -218,6 +275,8 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid action' });
     }
   } catch (err) {
+    console.error('Bill API Error:', err);
+    console.error('Request body:', req.body);
     return res.status(500).json({ error: err.message || 'Internal server error' });
   }
 }; 
