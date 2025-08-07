@@ -35,6 +35,35 @@ function getAgeInMonths(dob, date) {
   return (d.getFullYear() - birth.getFullYear()) * 12 + (d.getMonth() - birth.getMonth());
 }
 
+// Helper: Convert age range string to months for comparison
+function parseAgeRangeToMonths(ageRange) {
+  if (!ageRange) return { min: 0, max: 0 };
+  
+  // Handle different age range formats
+  const parts = ageRange.toLowerCase().split('-');
+  if (parts.length !== 2) return { min: 0, max: 0 };
+  
+  const minStr = parts[0].trim();
+  const maxStr = parts[1].trim();
+  
+  // Extract numbers and units
+  const minMatch = minStr.match(/(\d+)\s*(month|year|months|years)?/);
+  const maxMatch = maxStr.match(/(\d+)\s*(month|year|months|years)?/);
+  
+  if (!minMatch || !maxMatch) return { min: 0, max: 0 };
+  
+  const minNum = parseInt(minMatch[1]);
+  const maxNum = parseInt(maxMatch[1]);
+  const minUnit = minMatch[2] || 'month';
+  const maxUnit = maxMatch[2] || 'month';
+  
+  // Convert to months
+  const minMonths = minUnit.includes('year') ? minNum * 12 : minNum;
+  const maxMonths = maxUnit.includes('year') ? maxNum * 12 : maxNum;
+  
+  return { min: minMonths, max: maxMonths };
+}
+
 // Example: Static milestones by age in months
 const MILESTONES = [
   { age: 2, items: ['Smiles at people', 'Can briefly calm themselves', 'Coos, makes gurgling sounds'] },
@@ -301,6 +330,8 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
   const [expandedNotes, setExpandedNotes] = useState({});
 
   const { clinic } = useClinic();
+
+
 
   const [savingNote, setSavingNote] = useState(false);
 
@@ -991,12 +1022,32 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
   const now = selectedDate || new Date();
   const ageMonths = patient.dob ? getAgeInMonths(patient.dob, now) : null;
   function getMilestoneGroup(ageMonths) {
-    if (ageMonths == null) return null;
+    if (ageMonths == null || !milestonesData?.milestones) return null;
+    
+    // Find the appropriate milestone group for the patient's age
     for (const group of milestonesData.milestones) {
-      const [min, max] = group.ageRange.split('-').map(s => parseInt(s));
-      if (ageMonths >= min && ageMonths <= max) return group;
+      const { min, max } = parseAgeRangeToMonths(group.ageRange);
+      if (ageMonths >= min && ageMonths <= max) {
+        return group;
+      }
     }
-    return null;
+    
+    // If no exact match found, find the closest age group
+    let closestGroup = null;
+    let closestDistance = Infinity;
+    
+    for (const group of milestonesData.milestones) {
+      const { min, max } = parseAgeRangeToMonths(group.ageRange);
+      const groupMidpoint = (min + max) / 2;
+      const distance = Math.abs(ageMonths - groupMidpoint);
+      
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestGroup = group;
+      }
+    }
+    
+    return closestGroup;
   }
   const milestoneGroup = getMilestoneGroup(ageMonths);
 
@@ -1967,46 +2018,52 @@ const PatientDetails = ({ patient, selectedDate, onClose, onAppointmentScheduled
                             const domains = ['cognitive', 'grossMotor', 'fineMotor', 'communicationSocial'];
                             // Get the patient's age in months for age-appropriate milestones
                             const ageMonths = patient.dob && note.visit_date ? getAgeInMonths(patient.dob, note.visit_date) : null;
-                            // Find the closest milestone group for the age
-                            const milestoneGroup = ageMonths !== null && milestonesData.milestones.length > 0
-                              ? milestonesData.milestones.reduce((closest, mg) => {
-                                  // Use ageRange string to get lower bound for comparison
-                                  const mgAge = parseInt((mg.ageRange || '').split('-')[0], 10);
-                                  if (!isNaN(mgAge) && mgAge <= ageMonths && (!closest || mgAge > parseInt((closest.ageRange || '').split('-')[0], 10))) {
-                                    return mg;
-                                  }
-                                  return closest;
-                                }, null)
-                              : milestonesData.milestones[0];
+                            // Find the appropriate milestone group for the age
+                            const milestoneGroup = getMilestoneGroup(ageMonths);
                             return (
                               <div className="mt-3">
-                                <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-200 flex items-center gap-2 mb-2"><Check className="w-4 h-4 text-blue-400" />Developmental Milestones</h4>
+                                <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-200 flex items-center gap-2 mb-2">
+                                  <Check className="w-4 h-4 text-blue-400" />
+                                  Developmental Milestones
+                                  {milestoneGroup && (
+                                    <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">
+                                      ({milestoneGroup.ageRange})
+                                    </span>
+                                  )}
+                                </h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  {domains.map(domain => {
-                                    const items = (milestoneGroup && milestoneGroup[domain]) || [];
-                                    return (
-                                      <div key={domain} className="bg-blue-50 dark:bg-gray-800 rounded-xl p-3 shadow-sm">
-                                        <div className="font-semibold text-blue-600 dark:text-blue-300 text-xs mb-2 flex items-center gap-2 uppercase tracking-wide">{domain.replace(/([A-Z])/g, ' $1')}</div>
-                                        <ul className="space-y-1">
-                                          {items.map((label, idx) => {
-                                            // Try to get the status from note.development_milestones, else default to met: true
-                                            const key = `${domain}-${idx}`;
-                                            const value = note.development_milestones && note.development_milestones[key] ? note.development_milestones[key] : { met: true, comment: '' };
-                                            return (
-                                              <li key={key} className="flex items-center gap-2 text-xs py-1">
-                                                <span className={`inline-block w-3 h-3 rounded-full ${value.met ? 'bg-green-400' : 'bg-rose-400'}`}></span>
-                                                <span className="text-gray-800 dark:text-gray-200 flex-1">{label}</span>
-                                                <span className={`ml-2 ${value.met ? 'text-green-700' : 'text-rose-700'}`}>{value.met ? 'Met' : 'Not met'}</span>
-                                                {!value.met && value.comment && (
-                                                  <span className="ml-2 text-gray-500 dark:text-gray-300">({value.comment})</span>
-                                                )}
-                                              </li>
-                                            );
-                                          })}
-                                        </ul>
-                                      </div>
-                                    );
-                                  })}
+                                  {milestoneGroup ? (
+                                    domains.map(domain => {
+                                      const items = (milestoneGroup && milestoneGroup[domain]) || [];
+                                      return (
+                                        <div key={domain} className="bg-blue-50 dark:bg-gray-800 rounded-xl p-3 shadow-sm">
+                                          <div className="font-semibold text-blue-600 dark:text-blue-300 text-xs mb-2 flex items-center gap-2 uppercase tracking-wide">{domain.replace(/([A-Z])/g, ' $1')}</div>
+                                          <ul className="space-y-1">
+                                            {items.map((label, idx) => {
+                                              // Try to get the status from note.development_milestones, else default to met: true
+                                              const key = `${domain}-${idx}`;
+                                              const value = note.development_milestones && note.development_milestones[key] ? note.development_milestones[key] : { met: true, comment: '' };
+                                              return (
+                                                <li key={key} className="flex items-center gap-2 text-xs py-1">
+                                                  <span className={`inline-block w-3 h-3 rounded-full ${value.met ? 'bg-green-400' : 'bg-rose-400'}`}></span>
+                                                  <span className="text-gray-800 dark:text-gray-200 flex-1">{label}</span>
+                                                  <span className={`ml-2 ${value.met ? 'text-green-700' : 'text-rose-700'}`}>{value.met ? 'Met' : 'Not met'}</span>
+                                                  {!value.met && value.comment && (
+                                                    <span className="ml-2 text-gray-500 dark:text-gray-300">({value.comment})</span>
+                                                  )}
+                                                </li>
+                                              );
+                                            })}
+                                          </ul>
+                                        </div>
+                                      );
+                                    })
+                                  ) : (
+                                    <div className="col-span-2 text-center py-4 text-gray-500 dark:text-gray-400">
+                                      <p>No milestone data available for this age group.</p>
+                                      <p className="text-sm">Patient age: {ageMonths ? `${Math.floor(ageMonths / 12)} years ${ageMonths % 12} months` : 'Unknown'}</p>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             );
